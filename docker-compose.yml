@@ -69,14 +69,188 @@ services:
       - ./app/data:/var/www/html/data
       - ./app/themes:/var/www/html/themes
       - /etc/localtime:/etc/localtime:ro
-      - /media/marc/EXT_2TB:/media/EXT_2TB:rw
+      - /mnt/EXT_2TB:/media/EXT_2TB:rw
     environment:
-      - VIRTUAL_HOST=nextcloud.marcpascu.com
-      - LETSENCRYPT_HOST=nextcloud.marcpascu.com
+      - VIRTUAL_HOST=cloud.marcpascu.com
+      - LETSENCRYPT_HOST=cloud.marcpascu.com
       - LETSENCRYPT_EMAIL=marcpascu@gmail.com
     restart: unless-stopped
 
+  netdata:
+    container_name: netdata
+    image: netdata/netdata
+    hostname: marcpascu.com 
+    ports:
+      - 19999:19999
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - apparmor:unconfined
+    volumes:
+      - /etc/passwd:/host/etc/passwd:ro
+      - /etc/group:/host/etc/group:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - VIRTUAL_HOST=monitor.marcpascu.com
+      - LETSENCRYPT_HOST=monitor.marcpascu.com
+      - LETSENCRYPT_EMAIL=marcpascu@gmail.com
+      - PGID=999
+
+  portainer:
+    container_name: portainer
+    image: portainer/portainer
+    restart: always
+    environment:
+      - VIRTUAL_HOST=portainer.marcpascu.com
+      - LETSENCRYPT_HOST=portainer.marcpascu.com
+      - LETSENCRYPT_EMAIL=marcpascu@gmail.com
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+
+  heimdall:
+    image: linuxserver/heimdall
+    container_name: heimdall
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ='Europe/Madrid'
+      - VIRTUAL_HOST=marcpascu.com
+      - LETSENCRYPT_HOST=marcpascu.com
+      - LETSENCRYPT_EMAIL=marcpascu@gmail.com
+    volumes:
+      - ./heimdall/config:/config
+    restart: unless-stopped
+
+  pihole:
+    container_name: pihole
+    domainname: docker
+    hostname: pihole
+    image: pihole/pihole:latest
+    depends_on:
+      - letsencrypt
+      - proxy    
+    ports:
+      - '53:53/tcp'
+      - '53:53/udp'
+      # - '67:67/udp'
+      - '8001:80'
+      - '8002:443'
+    restart: unless-stopped
+    volumes:
+      - ./pihole/pihole:/etc/pihole
+      # - ${USERDIR}/docker/pihole/pihole.log:/var/log/pihole.log
+      - ./pihole/dnsmasq.d:/etc/dnsmasq.d
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - VIRTUAL_HOST=pihole.marcpascu.com
+      - LETSENCRYPT_HOST=pihole.marcpascu.com
+      - LETSENCRYPT_EMAIL=marcpascu@gmail.com
+      #- ServerIP=${SERVER_IP}
+      - TZ='Europe/Madrid'
+      - WEBPASSWORD=Olakase12
+      - DNS1=127.0.0.1
+      - DNS2=1.1.1.1
+  calibre:
+    image: linuxserver/calibre
+    container_name: calibre
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Madrid
+      - GUAC_USER=marc #optional
+      - GUAC_PASS=0711aae7867f68f983ba13ca7be91742 #olakase12
+      - UMASK_SET=022 #optional
+      - VIRTUAL_HOST=calibre.marcpascu.com
+      - LETSENCRYPT_HOST=calibre.marcpascu.com
+      - LETSENCRYPT_EMAIL=marcpascu@gmail.com
+    volumes:
+      - /mnt/EXT_2TB/calibre-library:/config
+      - /mnt/EXT_2TB/Biblioteca:/books
+    ports:
+      - 8880:8080
+      - 8881:8081
+    restart: unless-stopped
+  
+  calibre-web:
+    image: linuxserver/calibre-web
+    container_name: calibre-web
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Madrid
+      - DOCKER_MODS=linuxserver/calibre-web:calibre
+      - VIRTUAL_HOST=biblioteca.marcpascu.com
+      - LETSENCRYPT_HOST=biblioteca.marcpascu.com
+      - LETSENCRYPT_EMAIL=marcpascu@gmail.com
+    volumes:
+      - .calibre-web:/config
+      - /mnt/EXT_2TB/calibre-library:/books
+    ports:
+      - 8883:8083
+    restart: unless-stopped
+
+  gitpod:
+    image: gitpod/workspace-full
+    container_name: gitpod
+    environment:
+#      - TZ='Europe/Madrid'
+      - VIRTUAL_HOST=ide.marcpascu.com
+      - LETSENCRYPT_HOST=ide.marcpascu.com
+      - LETSENCRYPT_EMAIL=marcpascu@gmail.com
+#    volumes:
+#      - ./heimdall/config:/config
+    restart: unless-stopped
+
+  restyaboard:
+    container_name: restya
+    image: restyaplatform/restyaboard:dev
+    depends_on:
+      - letsencrypt
+      - proxy 
+      - postgres
+    volumes:
+      - ./restya/media:/usr/share/nginx/html/media
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_ADMIN_USER=postgres
+      - POSTGRES_ADMIN_PASS=olakase12
+      - RESTYA_DB_USERNAME=restya
+      - RESTYA_DB_USERPASS=restya
+      - RESTYA_DB=restyaboard
+        #- SMTP_SERVER=smtp_relay
+        #- SMTP_PORT=587
+      #- TZ='Europe/Madrid'
+      - VIRTUAL_HOST=kanban.marcpascu.com
+      - LETSENCRYPT_HOST=kanban.marcpascu.com
+      - LETSENCRYPT_EMAIL=marcpascu@gmail.com
+    restart: always
+  
+    # See https://hub.docker.com/r/boky/postfix for documentation
+    # or try https://github.com/WeAreGenki/docker-smtp
+  smtp_relay:
+    container_name: smtp_relay
+    image: boky/postfix
+    environment:
+      #- RELAYHOST=CONFIGURE_ME
+      - ALLOW_EMPTY_SENDER_DOMAINS=true
+  
+  postgres:
+    container_name: postgres
+    image: postgres:12-alpine
+    labels:
+      - "restya db"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=olakase12
+    restart: always        
+
 volumes:
+  portainer_data:
   nextcloud:
   db:
 

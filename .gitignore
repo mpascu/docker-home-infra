@@ -1,2 +1,6 @@
 app/
 proxy/
+.calibre-web/
+heimdall/
+pihole/
+
