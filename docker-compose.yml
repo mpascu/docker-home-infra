@@ -2,84 +2,89 @@ version: '3'
 
 services:
 
+  #Reverse proxy to mask conections from each subdomain to the corresponding container
+  #https://hub.docker.com/r/jwilder/nginx-proxy/
   proxy:
     image: jwilder/nginx-proxy:alpine
     labels:
       - "com.github.jrcs.letsencrypt_nginx_proxy_companion.nginx_proxy=true"
-    container_name: nextcloud-proxy
-    #networks:
-    #  - nextcloud_network
+    container_name: reverse-proxy
     ports:
       - 80:80
       - 443:443
     volumes:
-      - ./proxy/conf.d:/etc/nginx/conf.d:rw
-      - ./proxy/vhost.d:/etc/nginx/vhost.d:rw
-      - ./proxy/html:/usr/share/nginx/html:rw
-      - ./proxy/certs:/etc/nginx/certs:ro
+      - ./config/reverse-proxy/conf.d:/etc/nginx/conf.d:rw
+      - ./config/reverse-proxy/vhost.d:/etc/nginx/vhost.d:rw
+      - ./config/reverse-proxy/html:/usr/share/nginx/html:rw
+      - ./config/reverse-proxy/certs:/etc/nginx/certs:ro
       - /etc/localtime:/etc/localtime:ro
       - /var/run/docker.sock:/tmp/docker.sock:ro
     restart: unless-stopped
   
+  #Automatize certificate creation and renewal for all docker containers that are proxied enabling HTTPS
+  #https://hub.docker.com/r/jrcs/letsencrypt-nginx-proxy-companion/
   letsencrypt:
     image: jrcs/letsencrypt-nginx-proxy-companion
-    container_name: nextcloud-letsencrypt
+    container_name: letsencrypt
     depends_on:
       - proxy
-    #networks:
-    #  - nextcloud_network
     volumes:
-      - ./proxy/certs:/etc/nginx/certs:rw
-      - ./proxy/vhost.d:/etc/nginx/vhost.d:rw
-      - ./proxy/html:/usr/share/nginx/html:rw
+      - ./config/reverse-proxy/certs:/etc/nginx/certs:rw
+      - ./config/reverse-proxy/vhost.d:/etc/nginx/vhost.d:rw
+      - ./config/reverse-proxy/html:/usr/share/nginx/html:rw
       - /etc/localtime:/etc/localtime:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       - NGINX_PROXY_CONTAINER=proxy
     restart: unless-stopped
 
+  # Database for nextcloud
+  #https://hub.docker.com/_/mariadb
   db:
     image: mariadb
     container_name: nextcloud-mariadb
-    #networks:
-    #  - nextcloud_network
     volumes:
-      - db:/var/lib/mysql
+      - ./config/nextcloud-mariadb:/var/lib/mysql
       - /etc/localtime:/etc/localtime:ro
     environment:
-      - MYSQL_ROOT_PASSWORD=Olakase12
-      - MYSQL_PASSWORD=olakase12
+      - MYSQL_ROOT_PASSWORD=${mysql_root_pass}
+      - MYSQL_PASSWORD=${mysql_user_pass}
       - MYSQL_DATABASE=nextcloud
       - MYSQL_USER=nextcloud
     restart: unless-stopped
   
-  app:
+  #File host and share
+  #https://hub.docker.com/_/nextcloud/
+  nextcloud:
     image: nextcloud:latest
-    container_name: nextcloud-app
-    #networks:
-    #  - nextcloud_network
+    container_name: nextcloud
     depends_on:
       - letsencrypt
       - proxy
       - db
     volumes:
-      - nextcloud:/var/www/html
-      - ./app/config:/var/www/html/config
-      - ./app/custom_apps:/var/www/html/custom_apps
-      - ./app/data:/var/www/html/data
-      - ./app/themes:/var/www/html/themes
+      - ./config/nextcloud/nextcloud:/var/www/html
+      - ./config/nextcloud/config:/var/www/html/config
+      - ./config/nextcloud/custom_apps:/var/www/html/custom_apps
+      - ./config/nextcloud/data:/var/www/html/data
+      - ./config/nextcloud/themes:/var/www/html/themes
       - /etc/localtime:/etc/localtime:ro
-      - /mnt/EXT_2TB:/media/EXT_2TB:rw
+      - ${external_storage}:/media/EXT_2TB:rw
     environment:
-      - VIRTUAL_HOST=cloud.marcpascu.com
-      - LETSENCRYPT_HOST=cloud.marcpascu.com
-      - LETSENCRYPT_EMAIL=marcpascu@gmail.com
+      - VIRTUAL_HOST=cloud.${hostname}
+      - LETSENCRYPT_HOST=cloud.${hostname}
+      - LETSENCRYPT_EMAIL=${mail}
     restart: unless-stopped
 
+  #System performance monitor
+  #https://hub.docker.com/r/netdata/netdata
   netdata:
     container_name: netdata
     image: netdata/netdata
-    hostname: marcpascu.com 
+    hostname: ${hostname} 
+    depends_on:
+      - letsencrypt
+      - proxy  
     ports:
       - 19999:19999
     cap_add:
@@ -93,37 +98,50 @@ services:
       - /sys:/host/sys:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
-      - VIRTUAL_HOST=monitor.marcpascu.com
-      - LETSENCRYPT_HOST=monitor.marcpascu.com
-      - LETSENCRYPT_EMAIL=marcpascu@gmail.com
+      - VIRTUAL_HOST=monitor.${hostname}
+      - LETSENCRYPT_HOST=monitor.${hostname}
+      - LETSENCRYPT_EMAIL=${mail}
       - PGID=999
+    restart: unless-stopped
 
+  #Docker management UI
+  #https://hub.docker.com/r/portainer/portainer/
   portainer:
     container_name: portainer
     image: portainer/portainer
-    restart: always
+    depends_on:
+      - letsencrypt
+      - proxy
     environment:
-      - VIRTUAL_HOST=portainer.marcpascu.com
-      - LETSENCRYPT_HOST=portainer.marcpascu.com
-      - LETSENCRYPT_EMAIL=marcpascu@gmail.com
+      - VIRTUAL_HOST=portainer.${hostname}
+      - LETSENCRYPT_HOST=portainer.${hostname}
+      - LETSENCRYPT_EMAIL=${mail}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - portainer_data:/data
+      - ./config/portainer:/data
+    restart: always
 
+  #Application dashboard
+  #https://hub.docker.com/r/linuxserver/heimdall/
   heimdall:
     image: linuxserver/heimdall
     container_name: heimdall
+    depends_on:
+      - letsencrypt
+      - proxy
     environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ='Europe/Madrid'
-      - VIRTUAL_HOST=marcpascu.com
-      - LETSENCRYPT_HOST=marcpascu.com
-      - LETSENCRYPT_EMAIL=marcpascu@gmail.com
+      - PUID=${PID}
+      - PGID=${GID}
+      - TZ=${TZ}
+      - VIRTUAL_HOST=${hostname}
+      - LETSENCRYPT_HOST=${hostname}
+      - LETSENCRYPT_EMAIL=${mail}
     volumes:
-      - ./heimdall/config:/config
+      - ./config/heimdall:/config
     restart: unless-stopped
 
+  #DNS sinkhole, blocks ads, malware, spam
+  #https://hub.docker.com/r/pihole/pihole/
   pihole:
     container_name: pihole
     domainname: docker
@@ -138,107 +156,369 @@ services:
       # - '67:67/udp'
       - '8001:80'
       - '8002:443'
-    restart: unless-stopped
     volumes:
-      - ./pihole/pihole:/etc/pihole
-      # - ${USERDIR}/docker/pihole/pihole.log:/var/log/pihole.log
-      - ./pihole/dnsmasq.d:/etc/dnsmasq.d
+      - ./config/pihole/pihole:/etc/pihole
+      # - ${USERDIR}/docker/pihole/pihole.log:/var/log/pihole.log #Uncomment to make logs persistent
+      - ./config/pihole/dnsmasq.d:/etc/dnsmasq.d
     cap_add:
       - NET_ADMIN
     environment:
-      - VIRTUAL_HOST=pihole.marcpascu.com
-      - LETSENCRYPT_HOST=pihole.marcpascu.com
-      - LETSENCRYPT_EMAIL=marcpascu@gmail.com
+      - VIRTUAL_HOST=pihole.${hostname}
+      - LETSENCRYPT_HOST=pihole.${hostname}
+      - LETSENCRYPT_EMAIL=${mail}
       #- ServerIP=${SERVER_IP}
-      - TZ='Europe/Madrid'
-      - WEBPASSWORD=Olakase12
+      - TZ=${TZ}
+      - WEBPASSWORD=${piholepasswd}
       - DNS1=127.0.0.1
       - DNS2=1.1.1.1
+    restart: unless-stopped
+  
+  # Ebook manager
+  #https://hub.docker.com/r/linuxserver/calibre
   calibre:
     image: linuxserver/calibre
     container_name: calibre
+    depends_on:
+      - letsencrypt
+      - proxy
     environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/Madrid
+      - PUID=${PID}
+      - PGID=${GID}
+      - TZ=${TZ}
       - GUAC_USER=marc #optional
-      - GUAC_PASS=0711aae7867f68f983ba13ca7be91742 #olakase12
+      - GUAC_PASS=0711aae7867f68f983ba13ca7be91742 #md5 hashed password
       - UMASK_SET=022 #optional
-      - VIRTUAL_HOST=calibre.marcpascu.com
-      - LETSENCRYPT_HOST=calibre.marcpascu.com
-      - LETSENCRYPT_EMAIL=marcpascu@gmail.com
+      - VIRTUAL_HOST=calibre.${hostname}
+      - VIRTUAL_PORT=8080
+      - LETSENCRYPT_HOST=calibre.${hostname}
+      - LETSENCRYPT_EMAIL=${mail}
     volumes:
-      - /mnt/EXT_2TB/calibre-library:/config
-      - /mnt/EXT_2TB/Biblioteca:/books
+      - ${external_storage}/BIBLIOTECA/calibre-library:/config
     ports:
       - 8880:8080
       - 8881:8081
     restart: unless-stopped
   
+  # Ebook library
+  #https://hub.docker.com/r/linuxserver/calibre-web
   calibre-web:
     image: linuxserver/calibre-web
     container_name: calibre-web
+    depends_on:
+      - letsencrypt
+      - proxy
     environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/Madrid
+      - PUID=${PID}
+      - PGID=${GID}
+      - TZ=${TZ}
       - DOCKER_MODS=linuxserver/calibre-web:calibre
-      - VIRTUAL_HOST=biblioteca.marcpascu.com
-      - LETSENCRYPT_HOST=biblioteca.marcpascu.com
-      - LETSENCRYPT_EMAIL=marcpascu@gmail.com
+      - VIRTUAL_HOST=biblioteca.${hostname}
+      - VIRTUAL_PORT=8083
+      - LETSENCRYPT_HOST=biblioteca.${hostname}
+      - LETSENCRYPT_EMAIL=${mail}
     volumes:
-      - .calibre-web:/config
-      - /mnt/EXT_2TB/calibre-library:/books
+      - ./config/calibre-web:/config
+      - ${external_storage}/BIBLIOTECA/calibre-library:/books
     ports:
       - 8883:8083
     restart: unless-stopped
 
-  gitpod:
-    image: gitpod/workspace-full
-    container_name: gitpod
+  # Torrent client
+  # https://hub.docker.com/r/linuxserver/transmission
+  transmission:
+    image: linuxserver/transmission
+    container_name: transmission
+    hostname: transmission
     environment:
-#      - TZ='Europe/Madrid'
-      - VIRTUAL_HOST=ide.marcpascu.com
-      - LETSENCRYPT_HOST=ide.marcpascu.com
-      - LETSENCRYPT_EMAIL=marcpascu@gmail.com
-#    volumes:
-#      - ./heimdall/config:/config
+      - PUID=${PID}
+      - PGID=${GID}
+      - TZ=${TZ}
+      - TRANSMISSION_WEB_HOME=/combustion-release/
+      - VIRTUAL_HOST=transmission.${hostname}
+      - VIRTUAL_PORT=9091
+      - LETSENCRYPT_HOST=transmission.${hostname}
+      - LETSENCRYPT_EMAIL=${mail}
+      - USER=username #optional
+      - PASS=${transmission_pass} #optional
+    volumes:
+      - ./config/transmission:/config
+      - ${external_storage}/downloads:/downloads
+      - ${external_storage}/downloads:/watch
+    ports:
+      - 8882:9091
+      - 51413:51413
+      - 51413:51413/udp
     restart: unless-stopped
 
+  # https://hub.docker.com/r/linuxserver/bazarr
+  bazarr:
+    image: linuxserver/bazarr
+    container_name: bazarr
+    environment:
+      - PUID= ${PID}
+      - PGID= ${GID}
+      - TZ= ${TZ}
+      - VIRTUAL_HOST=bazarr.${hostname}
+      - VIRTUAL_PORT=6767
+      - LETSENCRYPT_HOST=bazarr.${hostname}
+      - LETSENCRYPT_EMAIL=${mail}
+    volumes:
+      - ./config/bazarr:/config
+      - ${external_storage}/media/movies:/movies
+      - ${external_storage}/media/tv:/tv
+    ports:
+      - 8884:6767
+    networks:
+      - default
+    restart: unless-stopped
+
+  # https://hub.docker.com/r/linuxserver/sonarr
+  sonarr:
+    image: linuxserver/sonarr
+    container_name: sonarr
+    environment:
+      - PUID= ${PID}
+      - PGID= ${GID}
+      - TZ= ${TZ}
+      - VIRTUAL_HOST=sonarr.${hostname}
+      - VIRTUAL_PORT=8989
+      - LETSENCRYPT_HOST=sonarr.${hostname}
+      - LETSENCRYPT_EMAIL=${mail}
+    volumes:
+      - ./config/sonarr:/config
+      - ${external_storage}/media/tv:/tv
+      - ${external_storage}/downloads:/downloads
+    ports:
+      - 8885:8989
+    restart: unless-stopped
+
+  # https://hub.docker.com/r/linuxserver/radarr
+  radarr:
+    image: linuxserver/radarr
+    container_name: radarr
+    environment:
+      - PUID= ${PID}
+      - PGID= ${GID}
+      - TZ= ${TZ}
+      - VIRTUAL_HOST=radarr.${hostname}
+      - VIRTUAL_PORT=7878
+      - LETSENCRYPT_HOST=radarr.${hostname}
+      - LETSENCRYPT_EMAIL=${mail}
+    volumes:
+      - ./config/radarr:/config
+      - ${external_storage}/media/movies:/movies
+      - ${external_storage}/downloads:/downloads
+    ports:
+      - 8886:7878
+    restart: unless-stopped
+
+  # https://hub.docker.com/r/linuxserver/lidarr
+  lidarr:
+    image: linuxserver/lidarr
+    container_name: lidarr
+    environment:
+      - PUID= ${PID}
+      - PGID= ${GID}
+      - TZ= ${TZ}
+      - VIRTUAL_HOST=lidarr.${hostname}
+      - VIRTUAL_PORT=8686
+      - LETSENCRYPT_HOST=lidarr.${hostname}
+      - LETSENCRYPT_EMAIL=${mail}
+    volumes:
+      - ./config/lidarr:/config
+      - ${external_storage}/media/music:/music
+      - ${external_storage}/downloads:/downloads
+    ports:
+      - 8887:8686
+    restart: unless-stopped
+
+  # https://hub.docker.com/r/linuxserver/jackett
+  jackett:
+    image: linuxserver/jackett
+    container_name: jackett
+    hostname: jackett
+    environment:
+      - PUID= ${PID}
+      - PGID= ${GID}
+      - TZ= ${TZ}
+      - VIRTUAL_HOST=jackett.${hostname}
+      - VIRTUAL_PORT=9117
+      - LETSENCRYPT_HOST=jackett.${hostname}
+      - LETSENCRYPT_EMAIL=${mail}
+    volumes:
+      - ./config/jackett:/config
+      - ${external_storage}/downloads:/downloads
+    ports:
+      - 8888:9117
+    restart: unless-stopped
+
+  # https://hub.docker.com/r/lsiocommunity/organizr
+  organizr:
+    image: lsiocommunity/organizr
+    container_name: organizr
+    environment:
+      - PUID=${PID}
+      - PGID=${GID}
+      - VIRTUAL_HOST=organizr.${hostname}
+      - VIRTUAL_PORT=80
+      - LETSENCRYPT_HOST=organizr.${hostname}
+      - LETSENCRYPT_EMAIL=${mail}
+    volumes:
+      - ./config/organizr:/config
+    ports:
+      - 8889:80
+    restart: unless-stopped
+
+  # https://github.com/containrrr/watchtower
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    environment:
+      - TZ=${TZ}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ~/.docker/config.json:/config.json:ro
+    restart: unless-stopped
+    command: --interval 300 --cleanup
+
+  # https://hub.docker.com/r/linuxserver/plex/
+  plex:
+    image: linuxserver/plex
+    container_name: plex
+    environment:
+      - PUID=${PID}
+      - PGID=${GID}
+      - VERSION=docker
+    volumes:
+      - ./config/plex:/config
+      - ${external_storage}/media/tv:/data/tvshows
+      - ${external_storage}/media/movies:/data/movies
+      - ${external_storage}/media/music:/data/music
+      - ./transcode:/transcode
+    ports:
+      - '32400:32400'
+      - '32400:32400/udp'
+      - '32469:32469'
+      - '32469:32469/udp'
+      - '5353:5353/udp'
+      - '1900:1900/udp'
+    restart: unless-stopped
+
+  tautulli:
+    image: tautulli/tautulli
+    container_name: tautulli
+    environment:
+      - PUID=${PID}
+      - PGID=${GID}
+      - TZ=${TZ}
+      - VIRTUAL_HOST=tautulli.${hostname}
+      - VIRTUAL_PORT=8181
+      - LETSENCRYPT_HOST=tautulli.${hostname}
+      - LETSENCRYPT_EMAIL=${mail}
+    volumes:
+      - ./config/tautulli:/config
+      - ./config/plex/Library/Application Support/Plex Media Server/Logs:/logs:ro
+    ports:
+      - 8901:8181
+    depends_on:
+      - plex
+    restart: unless-stopped
+
+  ombi:
+    image: linuxserver/ombi
+    container_name: ombi
+    environment:
+      - PUID=${PID}
+      - PGID=${GID}
+      - TZ=${TZ}
+      - VIRTUAL_HOST=ombi.${hostname}
+      - VIRTUAL_PORT=3579
+      - LETSENCRYPT_HOST=ombi.${hostname}
+      - LETSENCRYPT_EMAIL=${mail}
+    volumes:
+      - ./config/ombi:/config
+    ports:
+      - 8902:3579
+    restart: unless-stopped
+  
+  #Backup software
+  #https://www.duplicati.com/
+  duplicati:
+    image: linuxserver/duplicati
+    container_name: duplicati
+    environment:
+      - PUID=${PID}
+      - PGID=${GID}
+      - TZ=${TZ}
+      - VIRTUAL_HOST=duplicati.${hostname}
+      - VIRTUAL_PORT=8200
+      - LETSENCRYPT_HOST=duplicati.${hostname}
+      - LETSENCRYPT_EMAIL=${mail}
+    volumes:
+      - ./config/duplicati:/config
+      - ./backups:/backups
+      - ./config:/source
+    ports:
+      - 8903:8200
+    restart: unless-stopped
+
+#  gitpod:
+#    image: gitpod/workspace-full
+#    container_name: gitpod
+#    depends_on:
+#      - letsencrypt
+#      - proxy
+#    ports:
+#      - 8000:8000
+#    environment:
+#      - TZ=${TZ}
+#      - VIRTUAL_HOST=ide.${hostname}
+#      - LETSENCRYPT_HOST=ide.${hostname}
+#      - LETSENCRYPT_EMAIL=${mail}
+#    restart: unless-stopped
+
+  #Kanban board
+  #https://hub.docker.com/r/restyaplatform/restyaboard
   restyaboard:
     container_name: restya
+    hostname: restya
     image: restyaplatform/restyaboard:dev
     depends_on:
       - letsencrypt
       - proxy 
       - postgres
     volumes:
-      - ./restya/media:/usr/share/nginx/html/media
+      - ./config/restya/media:/usr/share/nginx/html/media
+    ports:
+      - 8904:80
     environment:
+      - VIRTUAL_HOST=kanban.${hostname}
+      - VIRTUAL_PORT=80
+      - LETSENCRYPT_HOST=kanban.${hostname}
+      - LETSENCRYPT_EMAIL=${mail}
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_ADMIN_USER=postgres
-      - POSTGRES_ADMIN_PASS=olakase12
+      - POSTGRES_ADMIN_PASS=${postgres_pass}
       - RESTYA_DB_USERNAME=restya
       - RESTYA_DB_USERPASS=restya
       - RESTYA_DB=restyaboard
         #- SMTP_SERVER=smtp_relay
         #- SMTP_PORT=587
-      #- TZ='Europe/Madrid'
-      - VIRTUAL_HOST=kanban.marcpascu.com
-      - LETSENCRYPT_HOST=kanban.marcpascu.com
-      - LETSENCRYPT_EMAIL=marcpascu@gmail.com
+      - TZ=${TZ}
     restart: always
-  
-    # See https://hub.docker.com/r/boky/postfix for documentation
-    # or try https://github.com/WeAreGenki/docker-smtp
+
+  # Mail sender, needed to send mail for registration and password recovery
+  # https://hub.docker.com/r/boky/postfix for documentation
   smtp_relay:
     container_name: smtp_relay
     image: boky/postfix
     environment:
       #- RELAYHOST=CONFIGURE_ME
       - ALLOW_EMPTY_SENDER_DOMAINS=true
-  
+    restart: unless-stopped
+
+  #Database for restyaboard
   postgres:
     container_name: postgres
     image: postgres:12-alpine
@@ -246,13 +526,21 @@ services:
       - "restya db"
     environment:
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=olakase12
+      - POSTGRES_PASSWORD=${postgres_pass}
     restart: always        
-
-volumes:
-  portainer_data:
-  nextcloud:
-  db:
+  
+  #Database manager
+  #https://hub.docker.com/_/adminer/
+  adminer:
+    container_name: adminer
+    image: adminer
+    ports:
+      - 8905:8080
+    environment:
+      - VIRTUAL_HOST=adminer.${hostname}
+      - VIRTUAL_PORT=8080
+      - LETSENCRYPT_HOST=adminer.${hostname}
+      - LETSENCRYPT_EMAIL=${mail}
 
 networks:
   default:

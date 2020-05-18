@@ -13,6 +13,10 @@ Tools included:
 - [Restyaboard](https://restya.com/board): Kanban board, management tool.
 - [Nextcloud](https://nextcloud.com/): Nextcloud is the most deployed on-premises file share and collaboration platform. 
 
+- [Duplicati](https://www.duplicati.com/): Backup tool
+- [Postgresql](https://www.postgresql.org/): Database needed for Restyaboard
+- [Adminer](https://www.adminer.org/): Database management tool.
+
 # Prerequisites:
 	- Some domain
 	- Docker installed
@@ -76,3 +80,5 @@ docker-compose up -d
 
 # nginx
 ‘overwriteprotocol’ => ‘https’,
+
+#Remember to setup passwords at first deployment to sonarr, radarr and lidarr, otherwise they will be exposed to the internet without password.
