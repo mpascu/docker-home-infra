@@ -2,41 +2,40 @@ version: '3'
 
 services:
 
-  #Reverse proxy to mask conections from each subdomain to the corresponding container
-  #https://hub.docker.com/r/jwilder/nginx-proxy/
-  proxy:
-    image: jwilder/nginx-proxy:alpine
-    labels:
-      - "com.github.jrcs.letsencrypt_nginx_proxy_companion.nginx_proxy=true"
-    container_name: reverse-proxy
+  #Reverse proxy to route conections from each subdomain to the corresponding container
+  #Automate certificate creation and renewal for all docker containers that are proxied enabling HTTPS
+  traefik:
+    image: traefik:v2.2
+    container_name: traefik
+    restart: always
+    command:
+      - "--log.level=DEBUG"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=true"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+      - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
+      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=websecure"
+      - "--certificatesresolvers.myresolver.acme.email=${mail}"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    labels: 
+      # middleware redirect
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+      # global redirect to https
+      - "traefik.http.routers.redirs.rule=hostregexp(`{host:.+}`)"
+      - "traefik.http.routers.redirs.entrypoints=web"
+      - "traefik.http.routers.redirs.middlewares=redirect-to-https"
     ports:
       - 80:80
+      - 8907:8080
       - 443:443
     volumes:
-      - ./config/reverse-proxy/conf.d:/etc/nginx/conf.d:rw
-      - ./config/reverse-proxy/vhost.d:/etc/nginx/vhost.d:rw
-      - ./config/reverse-proxy/html:/usr/share/nginx/html:rw
-      - ./config/reverse-proxy/certs:/etc/nginx/certs:ro
-      - /etc/localtime:/etc/localtime:ro
-      - /var/run/docker.sock:/tmp/docker.sock:ro
-    restart: unless-stopped
-  
-  #Automatize certificate creation and renewal for all docker containers that are proxied enabling HTTPS
-  #https://hub.docker.com/r/jrcs/letsencrypt-nginx-proxy-companion/
-  letsencrypt:
-    image: jrcs/letsencrypt-nginx-proxy-companion
-    container_name: letsencrypt
-    depends_on:
-      - proxy
-    volumes:
-      - ./config/reverse-proxy/certs:/etc/nginx/certs:rw
-      - ./config/reverse-proxy/vhost.d:/etc/nginx/vhost.d:rw
-      - ./config/reverse-proxy/html:/usr/share/nginx/html:rw
-      - /etc/localtime:/etc/localtime:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    environment:
-      - NGINX_PROXY_CONTAINER=proxy
-    restart: unless-stopped
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./config/traefik/letsencrypt:/letsencrypt
 
   # Database for nextcloud
   #https://hub.docker.com/_/mariadb
@@ -59,8 +58,6 @@ services:
     image: nextcloud:latest
     container_name: nextcloud
     depends_on:
-      - letsencrypt
-      - proxy
       - db
     volumes:
       - ./config/nextcloud/nextcloud:/var/www/html
@@ -74,6 +71,11 @@ services:
       - VIRTUAL_HOST=cloud.${hostname}
       - LETSENCRYPT_HOST=cloud.${hostname}
       - LETSENCRYPT_EMAIL=${mail}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.nextcloud.rule=Host(`cloud.${hostname}`)"
+      - "traefik.http.routers.nextcloud.entrypoints=websecure"
+      - "traefik.http.routers.nextcloud.tls.certresolver=myresolver"
     restart: unless-stopped
 
   #System performance monitor
@@ -81,10 +83,7 @@ services:
   netdata:
     container_name: netdata
     image: netdata/netdata
-    hostname: ${hostname} 
-    depends_on:
-      - letsencrypt
-      - proxy  
+    hostname: ${hostname}   
     ports:
       - 19999:19999
     cap_add:
@@ -98,27 +97,29 @@ services:
       - /sys:/host/sys:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
-      - VIRTUAL_HOST=monitor.${hostname}
-      - LETSENCRYPT_HOST=monitor.${hostname}
-      - LETSENCRYPT_EMAIL=${mail}
       - PGID=999
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.netdata.rule=Host(`monitor.${hostname}`)"
+      - "traefik.http.routers.netdata.entrypoints=websecure"
+      - "traefik.http.routers.netdata.tls.certresolver=myresolver"
     restart: unless-stopped
 
   #Docker management UI
   #https://hub.docker.com/r/portainer/portainer/
   portainer:
     container_name: portainer
-    image: portainer/portainer
-    depends_on:
-      - letsencrypt
-      - proxy
-    environment:
-      - VIRTUAL_HOST=portainer.${hostname}
-      - LETSENCRYPT_HOST=portainer.${hostname}
-      - LETSENCRYPT_EMAIL=${mail}
+    image: portainer/portainer-ce
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./config/portainer:/data
+    ports:
+      - 9000:9000
+    labels:
+      - "traefik.http.routers.portainer.rule=Host(`portainer.${hostname}`)"
+      - "traefik.http.routers.portainer.entrypoints=websecure"
+      - "traefik.http.routers.portainer.tls.certresolver=myresolver"
+      - "traefik.http.services.portainer.loadbalancer.server.port=9000"
     restart: always
 
   #Application dashboard
@@ -126,30 +127,25 @@ services:
   heimdall:
     image: linuxserver/heimdall
     container_name: heimdall
-    depends_on:
-      - letsencrypt
-      - proxy
     environment:
       - PUID=${PID}
       - PGID=${GID}
       - TZ=${TZ}
-      - VIRTUAL_HOST=${hostname}
-      - LETSENCRYPT_HOST=${hostname}
-      - LETSENCRYPT_EMAIL=${mail}
     volumes:
       - ./config/heimdall:/config
+    labels:
+      - "traefik.http.routers.heimdall.rule=Host(`${hostname}`)"
+      - "traefik.http.routers.heimdall.entrypoints=websecure"
+      - "traefik.http.routers.heimdall.tls.certresolver=myresolver"
     restart: unless-stopped
 
   #DNS sinkhole, blocks ads, malware, spam
   #https://hub.docker.com/r/pihole/pihole/
   pihole:
     container_name: pihole
-    domainname: docker
-    hostname: pihole
-    image: pihole/pihole:latest
-    depends_on:
-      - letsencrypt
-      - proxy    
+    domainname: marcpascu.com
+    hostname: pihole.marcpascu.com
+    image: pihole/pihole:latest   
     ports:
       - '53:53/tcp'
       - '53:53/udp'
@@ -158,29 +154,45 @@ services:
       - '8002:443'
     volumes:
       - ./config/pihole/pihole:/etc/pihole
+      #- ./config/pihole/lighttpd:/etc/lighttpd
       # - ${USERDIR}/docker/pihole/pihole.log:/var/log/pihole.log #Uncomment to make logs persistent
       - ./config/pihole/dnsmasq.d:/etc/dnsmasq.d
     cap_add:
       - NET_ADMIN
     environment:
-      - VIRTUAL_HOST=pihole.${hostname}
-      - LETSENCRYPT_HOST=pihole.${hostname}
-      - LETSENCRYPT_EMAIL=${mail}
       #- ServerIP=${SERVER_IP}
       - TZ=${TZ}
       - WEBPASSWORD=${piholepasswd}
       - DNS1=127.0.0.1
       - DNS2=1.1.1.1
+      - VIRTUAL_HOST= pihole.${hostname}
+      - VIRTUAL_PORT= 80
+    labels:
+      - "traefik.http.routers.pihole.rule=Host(`pihole.${hostname}`)"
+      - "traefik.http.routers.pihole.entrypoints=websecure"
+      - "traefik.http.routers.pihole.tls.certresolver=myresolver"
+      - "traefik.http.services.pihole.loadbalancer.server.port=80"
     restart: unless-stopped
   
+  guacamole:
+    image: oznu/guacamole
+    container_name: guacamole
+    volumes:
+      - ./config/guacamole:/config
+    ports:
+      - 8079:8080
+    labels:
+      - "traefik.http.routers.guacamole.rule=Host(`guacamole.${hostname}`)"
+      - "traefik.http.routers.guacamole.entrypoints=websecure"
+      - "traefik.http.routers.guacamole.tls.certresolver=myresolver"
+      - "traefik.http.services.guacamole.loadbalancer.server.port=8080"
+    restart: unless-stopped
+
   # Ebook manager
   #https://hub.docker.com/r/linuxserver/calibre
   calibre:
     image: linuxserver/calibre
     container_name: calibre
-    depends_on:
-      - letsencrypt
-      - proxy
     environment:
       - PUID=${PID}
       - PGID=${GID}
@@ -188,15 +200,16 @@ services:
       - GUAC_USER=marc #optional
       - GUAC_PASS=0711aae7867f68f983ba13ca7be91742 #md5 hashed password
       - UMASK_SET=022 #optional
-      - VIRTUAL_HOST=calibre.${hostname}
-      - VIRTUAL_PORT=8080
-      - LETSENCRYPT_HOST=calibre.${hostname}
-      - LETSENCRYPT_EMAIL=${mail}
     volumes:
-      - ${external_storage}/BIBLIOTECA/calibre-library:/config
+      - ${internal_storage}/BIBLIOTECA/calibre-library:/config
     ports:
       - 8880:8080
       - 8881:8081
+    labels:
+      - "traefik.http.routers.calibre.rule=Host(`calibre.${hostname}`)"
+      - "traefik.http.routers.calibre.entrypoints=websecure"
+      - "traefik.http.routers.calibre.tls.certresolver=myresolver"
+      - "traefik.http.services.calibre.loadbalancer.server.port=8080"
     restart: unless-stopped
   
   # Ebook library
@@ -204,23 +217,20 @@ services:
   calibre-web:
     image: linuxserver/calibre-web
     container_name: calibre-web
-    depends_on:
-      - letsencrypt
-      - proxy
     environment:
       - PUID=${PID}
       - PGID=${GID}
       - TZ=${TZ}
       - DOCKER_MODS=linuxserver/calibre-web:calibre
-      - VIRTUAL_HOST=biblioteca.${hostname}
-      - VIRTUAL_PORT=8083
-      - LETSENCRYPT_HOST=biblioteca.${hostname}
-      - LETSENCRYPT_EMAIL=${mail}
     volumes:
       - ./config/calibre-web:/config
-      - ${external_storage}/BIBLIOTECA/calibre-library:/books
+      - ${internal_storage}/BIBLIOTECA/calibre-library:/books
     ports:
       - 8883:8083
+    labels:
+      - "traefik.http.routers.biblioteca.rule=Host(`biblioteca.${hostname}`)"
+      - "traefik.http.routers.biblioteca.entrypoints=websecure"
+      - "traefik.http.routers.biblioteca.tls.certresolver=myresolver"
     restart: unless-stopped
 
   # Torrent client
@@ -234,10 +244,6 @@ services:
       - PGID=${GID}
       - TZ=${TZ}
       - TRANSMISSION_WEB_HOME=/combustion-release/
-      - VIRTUAL_HOST=transmission.${hostname}
-      - VIRTUAL_PORT=9091
-      - LETSENCRYPT_HOST=transmission.${hostname}
-      - LETSENCRYPT_EMAIL=${mail}
       - USER=username #optional
       - PASS=${transmission_pass} #optional
     volumes:
@@ -248,6 +254,10 @@ services:
       - 8882:9091
       - 51413:51413
       - 51413:51413/udp
+    labels:
+      - "traefik.http.routers.transmission.rule=Host(`transmission.${hostname}`)"
+      - "traefik.http.routers.transmission.entrypoints=websecure"
+      - "traefik.http.routers.transmission.tls.certresolver=myresolver"
     restart: unless-stopped
 
   # https://hub.docker.com/r/linuxserver/bazarr
@@ -280,16 +290,16 @@ services:
       - PUID= ${PID}
       - PGID= ${GID}
       - TZ= ${TZ}
-      - VIRTUAL_HOST=sonarr.${hostname}
-      - VIRTUAL_PORT=8989
-      - LETSENCRYPT_HOST=sonarr.${hostname}
-      - LETSENCRYPT_EMAIL=${mail}
     volumes:
       - ./config/sonarr:/config
       - ${external_storage}/media/tv:/tv
       - ${external_storage}/downloads:/downloads
     ports:
       - 8885:8989
+    labels:
+      - "traefik.http.routers.sonarr.rule=Host(`sonarr.${hostname}`)"
+      - "traefik.http.routers.sonarr.entrypoints=websecure"
+      - "traefik.http.routers.sonarr.tls.certresolver=myresolver"
     restart: unless-stopped
 
   # https://hub.docker.com/r/linuxserver/radarr
@@ -300,16 +310,16 @@ services:
       - PUID= ${PID}
       - PGID= ${GID}
       - TZ= ${TZ}
-      - VIRTUAL_HOST=radarr.${hostname}
-      - VIRTUAL_PORT=7878
-      - LETSENCRYPT_HOST=radarr.${hostname}
-      - LETSENCRYPT_EMAIL=${mail}
     volumes:
       - ./config/radarr:/config
       - ${external_storage}/media/movies:/movies
       - ${external_storage}/downloads:/downloads
     ports:
       - 8886:7878
+    labels:
+      - "traefik.http.routers.radarr.rule=Host(`radarr.${hostname}`)"
+      - "traefik.http.routers.radarr.entrypoints=websecure"
+      - "traefik.http.routers.radarr.tls.certresolver=myresolver"
     restart: unless-stopped
 
   # https://hub.docker.com/r/linuxserver/lidarr
@@ -320,16 +330,16 @@ services:
       - PUID= ${PID}
       - PGID= ${GID}
       - TZ= ${TZ}
-      - VIRTUAL_HOST=lidarr.${hostname}
-      - VIRTUAL_PORT=8686
-      - LETSENCRYPT_HOST=lidarr.${hostname}
-      - LETSENCRYPT_EMAIL=${mail}
     volumes:
       - ./config/lidarr:/config
       - ${external_storage}/media/music:/music
       - ${external_storage}/downloads:/downloads
     ports:
       - 8887:8686
+    labels:
+      - "traefik.http.routers.lidarr.rule=Host(`lidarr.${hostname}`)"
+      - "traefik.http.routers.lidarr.entrypoints=websecure"
+      - "traefik.http.routers.lidarr.tls.certresolver=myresolver"
     restart: unless-stopped
 
   # https://hub.docker.com/r/linuxserver/jackett
@@ -341,16 +351,17 @@ services:
       - PUID= ${PID}
       - PGID= ${GID}
       - TZ= ${TZ}
-      - VIRTUAL_HOST=jackett.${hostname}
-      - VIRTUAL_PORT=9117
-      - LETSENCRYPT_HOST=jackett.${hostname}
-      - LETSENCRYPT_EMAIL=${mail}
     volumes:
       - ./config/jackett:/config
       - ${external_storage}/downloads:/downloads
     ports:
       - 8888:9117
+    labels:
+      - "traefik.http.routers.jackett.rule=Host(`jackett.${hostname}`)"
+      - "traefik.http.routers.jackett.entrypoints=websecure"
+      - "traefik.http.routers.jackett.tls.certresolver=myresolver"
     restart: unless-stopped
+
 
   # https://hub.docker.com/r/lsiocommunity/organizr
   organizr:
@@ -359,14 +370,14 @@ services:
     environment:
       - PUID=${PID}
       - PGID=${GID}
-      - VIRTUAL_HOST=organizr.${hostname}
-      - VIRTUAL_PORT=80
-      - LETSENCRYPT_HOST=organizr.${hostname}
-      - LETSENCRYPT_EMAIL=${mail}
     volumes:
       - ./config/organizr:/config
     ports:
       - 8889:80
+    labels:
+      - "traefik.http.routers.organizr.rule=Host(`organizr.${hostname}`)"
+      - "traefik.http.routers.organizr.entrypoints=websecure"
+      - "traefik.http.routers.organizr.tls.certresolver=myresolver"
     restart: unless-stopped
 
   # https://github.com/containrrr/watchtower
@@ -375,6 +386,8 @@ services:
     container_name: watchtower
     environment:
       - TZ=${TZ}
+      #WATCHTOWER_NOTIFICATIONS: slack
+      #WATCHTOWER_NOTIFICATION_SLACK_HOOK_URL: ${SLACK}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ~/.docker/config.json:/config.json:ro
@@ -400,46 +413,46 @@ services:
       - '32400:32400/udp'
       - '32469:32469'
       - '32469:32469/udp'
-      - '5353:5353/udp'
+      #- '5353:5353/udp'
       - '1900:1900/udp'
     restart: unless-stopped
 
-  tautulli:
-    image: tautulli/tautulli
-    container_name: tautulli
-    environment:
-      - PUID=${PID}
-      - PGID=${GID}
-      - TZ=${TZ}
-      - VIRTUAL_HOST=tautulli.${hostname}
-      - VIRTUAL_PORT=8181
-      - LETSENCRYPT_HOST=tautulli.${hostname}
-      - LETSENCRYPT_EMAIL=${mail}
-    volumes:
-      - ./config/tautulli:/config
-      - ./config/plex/Library/Application Support/Plex Media Server/Logs:/logs:ro
-    ports:
-      - 8901:8181
-    depends_on:
-      - plex
-    restart: unless-stopped
+#  tautulli:
+#    image: tautulli/tautulli
+#    container_name: tautulli
+#    environment:
+#      - PUID=${PID}
+#      - PGID=${GID}
+#      - TZ=${TZ}
+#      - VIRTUAL_HOST=tautulli.${hostname}
+#      - VIRTUAL_PORT=8181
+#      - LETSENCRYPT_HOST=tautulli.${hostname}
+#      - LETSENCRYPT_EMAIL=${mail}
+#    volumes:
+#      - ./config/tautulli:/config
+#      - ./config/plex/Library/Application Support/Plex Media Server/Logs:/logs:ro
+#    ports:
+#      - 8901:8181
+#    depends_on:
+#      - plex
+#    restart: unless-stopped
 
-  ombi:
-    image: linuxserver/ombi
-    container_name: ombi
-    environment:
-      - PUID=${PID}
-      - PGID=${GID}
-      - TZ=${TZ}
-      - VIRTUAL_HOST=ombi.${hostname}
-      - VIRTUAL_PORT=3579
-      - LETSENCRYPT_HOST=ombi.${hostname}
-      - LETSENCRYPT_EMAIL=${mail}
-    volumes:
-      - ./config/ombi:/config
-    ports:
-      - 8902:3579
-    restart: unless-stopped
+#  ombi:
+#    image: linuxserver/ombi
+#    container_name: ombi
+#    environment:
+#      - PUID=${PID}
+#      - PGID=${GID}
+#      - TZ=${TZ}
+#      - VIRTUAL_HOST=ombi.${hostname}
+#      - VIRTUAL_PORT=3579
+#      - LETSENCRYPT_HOST=ombi.${hostname}
+#      - LETSENCRYPT_EMAIL=${mail}
+#    volumes:
+#      - ./config/ombi:/config
+#    ports:
+#      - 8902:3579
+#    restart: unless-stopped
   
   #Backup software
   #https://www.duplicati.com/
@@ -447,19 +460,19 @@ services:
     image: linuxserver/duplicati
     container_name: duplicati
     environment:
-      - PUID=${PID}
-      - PGID=${GID}
+      - PUID=0
+      - PGID=0
       - TZ=${TZ}
-      - VIRTUAL_HOST=duplicati.${hostname}
-      - VIRTUAL_PORT=8200
-      - LETSENCRYPT_HOST=duplicati.${hostname}
-      - LETSENCRYPT_EMAIL=${mail}
     volumes:
       - ./config/duplicati:/config
-      - ./backups:/backups
-      - ./config:/source
+      - ${external_storage}/BACKUPS/docker-home-infra:/backups
+      - ./:/source
     ports:
       - 8903:8200
+    labels:
+      - "traefik.http.routers.duplicati.rule=Host(`duplicati.${hostname}`)"
+      - "traefik.http.routers.duplicati.entrypoints=websecure"
+      - "traefik.http.routers.duplicati.tls.certresolver=myresolver"
     restart: unless-stopped
 
 #  gitpod:
@@ -484,18 +497,12 @@ services:
     hostname: restya
     image: restyaplatform/restyaboard:dev
     depends_on:
-      - letsencrypt
-      - proxy 
       - postgres
     volumes:
       - ./config/restya/media:/usr/share/nginx/html/media
     ports:
       - 8904:80
     environment:
-      - VIRTUAL_HOST=kanban.${hostname}
-      - VIRTUAL_PORT=80
-      - LETSENCRYPT_HOST=kanban.${hostname}
-      - LETSENCRYPT_EMAIL=${mail}
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_ADMIN_USER=postgres
@@ -506,6 +513,10 @@ services:
         #- SMTP_SERVER=smtp_relay
         #- SMTP_PORT=587
       - TZ=${TZ}
+    labels:
+      - "traefik.http.routers.restyaboard.rule=Host(`kanban.${hostname}`)"
+      - "traefik.http.routers.restyaboard.entrypoints=websecure"
+      - "traefik.http.routers.restyaboard.tls.certresolver=myresolver"
     restart: always
 
   # Mail sender, needed to send mail for registration and password recovery
@@ -516,6 +527,12 @@ services:
     environment:
       #- RELAYHOST=CONFIGURE_ME
       - ALLOW_EMPTY_SENDER_DOMAINS=true
+    ports:
+      - 9998:587
+    labels:
+      - "traefik.http.routers.smtp.rule=Host(`smtp.${hostname}`)"
+      - "traefik.http.routers.smtp.entrypoints=websecure"
+      - "traefik.http.routers.smtp.tls.certresolver=myresolver"
     restart: unless-stopped
 
   #Database for restyaboard
@@ -524,6 +541,8 @@ services:
     image: postgres:12-alpine
     labels:
       - "restya db"
+    volumes: #793b443664b0ca41eed9c8dcaf1f5a532d00af8cbeb4d5da221907cd62dd927f
+      - ./config/postgres-data:/var/lib/postgresql/data
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=${postgres_pass}
@@ -536,11 +555,59 @@ services:
     image: adminer
     ports:
       - 8905:8080
+    labels:
+      - "traefik.http.routers.adminer.rule=Host(`adminer.${hostname}`)"
+      - "traefik.http.routers.adminer.entrypoints=websecure"
+      - "traefik.http.routers.adminer.tls.certresolver=myresolver"
+    restart: unless-stopped
+
+  homeassistant:
+    container_name: home-assistant
+    image: homeassistant/home-assistant:stable
+    volumes:
+      - ./config/homeassistant:/config
+    ports:
+      - 8906:8123
     environment:
-      - VIRTUAL_HOST=adminer.${hostname}
-      - VIRTUAL_PORT=8080
-      - LETSENCRYPT_HOST=adminer.${hostname}
-      - LETSENCRYPT_EMAIL=${mail}
+      - TZ=${TZ}
+    labels:
+      - "traefik.http.routers.homeassistant.rule=Host(`smarthome.${hostname}`)"
+      - "traefik.http.routers.homeassistant.entrypoints=websecure"
+      - "traefik.http.routers.homeassistant.tls.certresolver=myresolver"
+    restart: always
+
+  sftp:
+    image: atmoz/sftp
+    volumes:
+        - ./config/sftp:/home/foo/upload
+    ports:
+        - "2222:22"
+    labels:
+      - "traefik.http.routers.sftp.rule=Host(`sftp.${hostname}`)"
+      - "traefik.http.routers.sftp.entrypoints=websecure"
+      - "traefik.http.routers.sftp.tls.certresolver=myresolver"
+    command: foo:Olakase12:1001
+
+  openhab:
+    container_name: openhab
+    image: "openhab/openhab:2.5.6"
+    restart: always
+    ports:
+      - "8908:8080"
+      #- "8443:8443"
+    volumes:
+      - "./config/openhab/addons:/openhab/addons"
+      - "./config/openhab/conf:/openhab/conf"
+      - "./config/openhab/userdata:/openhab/userdata"
+    environment:
+      OPENHAB_HTTP_PORT: "8080"
+      OPENHAB_HTTPS_PORT: "8443"
+      EXTRA_JAVA_OPTS: "-Duser.timezone=${TZ}"
+    labels:
+      - "traefik.http.routers.openhab.rule=Host(`openhab.${hostname}`)"
+      - "traefik.http.routers.openhab.entrypoints=websecure"
+      - "traefik.http.routers.openhab.tls.certresolver=myresolver"
+      - "traefik.http.services.openhab.loadbalancer.server.port=8080"
 
 networks:
   default:
