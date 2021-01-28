@@ -1,7 +1,13 @@
 # docker-home-infra 
 This repo consists mainly in a docker-composed file ready to spin up a bunch of useful media, file-sharing, programming, web tools, databases... All the persistent data is stored in the ./config folder and Duplicati is provided in order to backup all data.
 
-##Tools included:
+## Screenshots
+
+![heimdall sceenshot](https://github.com/mpascu/docker-home-infra/heimdall.png)
+
+![Organizr sceenshot](https://github.com/mpascu/docker-home-infra/organizr.png)
+
+## Tools included:
 
 - [Traefik](https://traefik.io/): Reverse proxy to be in front of all web services
 - [Nextcloud](https://nextcloud.com/): Nextcloud is the most deployed on-premises file share and collaboration platform. 
