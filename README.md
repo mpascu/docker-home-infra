@@ -3,9 +3,9 @@ This repo consists mainly in a docker-composed file ready to spin up a bunch of 
 
 ## Screenshots
 
-![heimdall sceenshot](https://github.com/mpascu/docker-home-infra/master/heimdall.png)
+![heimdall sceenshot](https://raw.githubusercontent.com/mpascu/docker-home-infra/master/heimdall.png)
 
-![Organizr sceenshot](https://github.com/mpascu/docker-home-infra/master/organizr.png)
+![Organizr sceenshot](https://raw.githubusercontent.com/mpascu/docker-home-infra/master/organizr.png)
 
 ## Tools included:
 
