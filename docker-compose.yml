@@ -4,26 +4,12 @@ services:
 
   #Reverse proxy to route conections from each subdomain to the corresponding container
   #Automate certificate creation and renewal for all docker containers that are proxied enabling HTTPS
-  traefik:
-    image: traefik:v2.2
+  reverse_proxy:
+    image: traefik:v2.9.5
     container_name: traefik
     restart: always
     command:
-      - "--log.level=INFO"
-      - "--api.insecure=true"
       - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=true"
-      - "--entrypoints.web.address=:80"
-      - "--entrypoints.websecure.address=:443"
-      - "--entrypoints.postgres.address=:8909"
-      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
-      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
-      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
-      - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
-      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=websecure"
-      - "--certificatesresolvers.myresolver.acme.email=${mail}"
-      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
-      - "--serverstransport.insecureskipverify=true"
     labels: 
       # middleware redirect
       - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
@@ -38,47 +24,54 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./config/traefik/letsencrypt:/letsencrypt
+      - ./config/traefik/traefik.yml:/traefik.yml:ro
+      - ./config/traefik/config.yml:/config.yml:ro
+    dns:
+        - 8.8.8.8
+    network_mode: "bridge"
 
   # Database for nextcloud
   #https://hub.docker.com/_/mariadb
-  db:
-    image: mariadb
-    container_name: nextcloud-mariadb
-    volumes:
-      - ./config/nextcloud-mariadb:/var/lib/mysql
-      - /etc/localtime:/etc/localtime:ro
-    environment:
-      - MYSQL_ROOT_PASSWORD=${mysql_root_pass}
-      - MYSQL_PASSWORD=${mysql_user_pass}
-      - MYSQL_DATABASE=nextcloud
-      - MYSQL_USER=nextcloud
-    restart: unless-stopped
+  #mariadb:
+  #  image: mariadb
+  #  container_name: nextcloud-mariadb
+  #  volumes:
+  #    - ./config/nextcloud-mariadb:/var/lib/mysql
+  #    - /etc/localtime:/etc/localtime:ro
+  #  environment:
+  #    - MYSQL_ROOT_PASSWORD=${mysql_root_pass}
+  #    - MYSQL_PASSWORD=${mysql_user_pass}
+  #    - MYSQL_DATABASE=nextcloud
+  #    - MYSQL_USER=nextcloud
+  #  restart: unless-stopped
   
   #File host and share
   #https://hub.docker.com/_/nextcloud/
-  nextcloud:
-    image: nextcloud:latest
-    container_name: nextcloud
-    depends_on:
-      - db
-    volumes:
-      - ./config/nextcloud/nextcloud:/var/www/html
-      - ./config/nextcloud/config:/var/www/html/config
-      - ./config/nextcloud/custom_apps:/var/www/html/custom_apps
-      - ./config/nextcloud/data:/var/www/html/data
-      - ./config/nextcloud/themes:/var/www/html/themes
-      - /etc/localtime:/etc/localtime:ro
-      - ${external_storage}:/media/EXT_2TB:rw
-    environment:
-      - VIRTUAL_HOST=cloud.${hostname}
-      - LETSENCRYPT_HOST=cloud.${hostname}
-      - LETSENCRYPT_EMAIL=${mail}
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.nextcloud.rule=Host(`cloud.${hostname}`)"
-      - "traefik.http.routers.nextcloud.entrypoints=websecure"
-      - "traefik.http.routers.nextcloud.tls.certresolver=myresolver"
-    restart: unless-stopped
+#  nextcloud:
+#    image: nextcloud:21
+#    container_name: nextcloud
+#    depends_on:
+#      - mariadb
+#    ports:
+#      - 9002:80
+#    volumes:
+#      - ./config/nextcloud/nextcloud:/var/www/html
+#      - ./config/nextcloud/config:/var/www/html/config
+#      - ./config/nextcloud/custom_apps:/var/www/html/custom_apps
+#      - ./config/nextcloud/data:/var/www/html/data
+#      - ./config/nextcloud/themes:/var/www/html/themes
+#      - /etc/localtime:/etc/localtime:ro
+#      - ${external_storage}:/media/EXT_4TB:rw
+#    environment:
+#      - VIRTUAL_HOST=cloud.${hostname}
+#      - LETSENCRYPT_HOST=cloud.${hostname}
+#      - LETSENCRYPT_EMAIL=${mail}
+#    labels:
+#      - "traefik.enable=true"
+#      - "traefik.http.routers.cloud.rule=Host(`cloud.${hostname}`)"
+#      - "traefik.http.routers.cloud.entrypoints=websecure"
+#      - "traefik.http.routers.cloud.tls.certresolver=myresolver"
+#    restart: unless-stopped
 
   #System performance monitor
   #https://hub.docker.com/r/netdata/netdata
@@ -105,6 +98,7 @@ services:
       - "traefik.http.routers.netdata.rule=Host(`monitor.${hostname}`)"
       - "traefik.http.routers.netdata.entrypoints=websecure"
       - "traefik.http.routers.netdata.tls.certresolver=myresolver"
+      - "traefik.http.services.netdata.loadbalancer.server.port=19999"
     restart: unless-stopped
 
   #Docker management UI
@@ -118,6 +112,7 @@ services:
     ports:
       - 9000:9000
     labels:
+      - "traefik.enable=true"
       - "traefik.http.routers.portainer.rule=Host(`portainer.${hostname}`)"
       - "traefik.http.routers.portainer.entrypoints=websecure"
       - "traefik.http.routers.portainer.tls.certresolver=myresolver"
@@ -145,8 +140,8 @@ services:
   #https://hub.docker.com/r/pihole/pihole/
   pihole:
     container_name: pihole
-    domainname: marcpascu.com
-    hostname: pihole.marcpascu.com
+    domainname: ${hostname}
+    hostname: ${hostname}
     image: pihole/pihole:latest   
     ports:
       - '53:53/tcp'
@@ -156,21 +151,27 @@ services:
       - '8002:443'
     volumes:
       - ./config/pihole/pihole:/etc/pihole
-      #- ./config/pihole/lighttpd:/etc/lighttpd
+      - ./config/pihole/lighttpd:/etc/lighttpd
       # - ${USERDIR}/docker/pihole/pihole.log:/var/log/pihole.log #Uncomment to make logs persistent
       - ./config/pihole/dnsmasq.d:/etc/dnsmasq.d
     cap_add:
       - NET_ADMIN
+    dns:
+      - 127.0.0.1
+      - 8.8.8.8
     environment:
       #- ServerIP=${SERVER_IP}
       - TZ=${TZ}
       - WEBPASSWORD=${piholepasswd}
       - DNS1=127.0.0.1
       - DNS2=1.1.1.1
-      - VIRTUAL_HOST= pihole.${hostname}
+      - VIRTUAL_HOST= ${hostname}
       - VIRTUAL_PORT= 80
     labels:
-      - "traefik.http.routers.pihole.rule=Host(`pihole.${hostname}`)"
+      - "traefik.enable=true"
+      - "traefik.http.routers.pihole.rule=Host(`${hostname}`) && PathPrefix(`/pihole`)"
+      - "traefik.http.middlewares.pihole-strip.stripprefix.prefixes=/pihole"
+      - "traefik.http.routers.pihole.middlewares=pihole-strip"
       - "traefik.http.routers.pihole.entrypoints=websecure"
       - "traefik.http.routers.pihole.tls.certresolver=myresolver"
       - "traefik.http.services.pihole.loadbalancer.server.port=80"
@@ -184,6 +185,7 @@ services:
     ports:
       - 8079:8080
     labels:
+      - "traefik.enable=true"
       - "traefik.http.routers.guacamole.rule=Host(`guacamole.${hostname}`)"
       - "traefik.http.routers.guacamole.entrypoints=websecure"
       - "traefik.http.routers.guacamole.tls.certresolver=myresolver"
@@ -208,6 +210,7 @@ services:
       - 8880:8080
       - 8881:8081
     labels:
+      - "traefik.enable=true"
       - "traefik.http.routers.calibre.rule=Host(`calibre.${hostname}`)"
       - "traefik.http.routers.calibre.entrypoints=websecure"
       - "traefik.http.routers.calibre.tls.certresolver=myresolver"
@@ -230,6 +233,7 @@ services:
     ports:
       - 8883:8083
     labels:
+      - "traefik.enable=true"
       - "traefik.http.routers.biblioteca.rule=Host(`biblioteca.${hostname}`)"
       - "traefik.http.routers.biblioteca.entrypoints=websecure"
       - "traefik.http.routers.biblioteca.tls.certresolver=myresolver"
@@ -257,6 +261,7 @@ services:
       - 51413:51413
       - 51413:51413/udp
     labels:
+      - "traefik.enable=true"
       - "traefik.http.routers.transmission.rule=Host(`transmission.${hostname}`)"
       - "traefik.http.routers.transmission.entrypoints=websecure"
       - "traefik.http.routers.transmission.tls.certresolver=myresolver"
@@ -305,67 +310,67 @@ services:
   #  restart: unless-stopped
 
   # https://hub.docker.com/r/linuxserver/radarr
-  radarr:
-    image: linuxserver/radarr
-    container_name: radarr
-    environment:
-      - PUID= ${PID}
-      - PGID= ${GID}
-      - TZ= ${TZ}
-    volumes:
-      - ./config/radarr:/config
-      - ${external_storage}/media/movies:/movies
-      - ${external_storage}/downloads:/downloads
-    ports:
-      - 8886:7878
-    labels:
-      - "traefik.http.routers.radarr.rule=Host(`radarr.${hostname}`)"
-      - "traefik.http.routers.radarr.entrypoints=websecure"
-      - "traefik.http.routers.radarr.tls.certresolver=myresolver"
-    restart: unless-stopped
-
-  # https://hub.docker.com/r/linuxserver/lidarr
-  lidarr:
-    image: linuxserver/lidarr
-    container_name: lidarr
-    environment:
-      - PUID= ${PID}
-      - PGID= ${GID}
-      - TZ= ${TZ}
-    volumes:
-      - ./config/lidarr:/config
-      - ${external_storage}/media/music:/music
-      - ${external_storage}/downloads:/downloads
-    ports:
-      - 8887:8686
-    labels:
-      - "traefik.http.routers.lidarr.rule=Host(`lidarr.${hostname}`)"
-      - "traefik.http.routers.lidarr.entrypoints=websecure"
-      - "traefik.http.routers.lidarr.tls.certresolver=myresolver"
-    restart: unless-stopped
-
-  # https://hub.docker.com/r/linuxserver/jackett
-  jackett:
-    image: linuxserver/jackett
-    container_name: jackett
-    hostname: jackett
-    environment:
-      - PUID= ${PID}
-      - PGID= ${GID}
-      - TZ= ${TZ}
-    volumes:
-      - ./config/jackett:/config
-      - ${external_storage}/downloads:/downloads
-    ports:
-      - 8888:9117
-    labels:
-      - "traefik.http.routers.jackett.rule=Host(`jackett.${hostname}`)"
-      - "traefik.http.routers.jackett.entrypoints=websecure"
-      - "traefik.http.routers.jackett.tls.certresolver=myresolver"
-    restart: unless-stopped
-
-
-  # https://hub.docker.com/r/lsiocommunity/organizr
+  #radarr:
+  #  image: linuxserver/radarr
+  #  container_name: radarr
+  #  environment:
+  #    - PUID= ${PID}
+  #    - PGID= ${GID}
+  #    - TZ= ${TZ}
+  #  volumes:
+  #    - ./config/radarr:/config
+  #    - ${external_storage}/media/movies:/movies
+  #    - ${external_storage}/downloads:/downloads
+  #  ports:
+  #    - 8886:7878
+  #  labels:
+  #    - "traefik.http.routers.radarr.rule=Host(`radarr.${hostname}`)"
+  #    - "traefik.http.routers.radarr.entrypoints=websecure"
+  #    - "traefik.http.routers.radarr.tls.certresolver=myresolver"
+  #  restart: unless-stopped
+#
+  ## https://hub.docker.com/r/linuxserver/lidarr
+  #lidarr:
+  #  image: linuxserver/lidarr
+  #  container_name: lidarr
+  #  environment:
+  #    - PUID= ${PID}
+  #    - PGID= ${GID}
+  #    - TZ= ${TZ}
+  #  volumes:
+  #    - ./config/lidarr:/config
+  #    - ${external_storage}/media/music:/music
+  #    - ${external_storage}/downloads:/downloads
+  #  ports:
+  #    - 8887:8686
+  #  labels:
+  #    - "traefik.http.routers.lidarr.rule=Host(`lidarr.${hostname}`)"
+  #    - "traefik.http.routers.lidarr.entrypoints=websecure"
+  #    - "traefik.http.routers.lidarr.tls.certresolver=myresolver"
+  #  restart: unless-stopped
+#
+  ## https://hub.docker.com/r/linuxserver/jackett
+  #jackett:
+  #  image: linuxserver/jackett
+  #  container_name: jackett
+  #  hostname: jackett
+  #  environment:
+  #    - PUID= ${PID}
+  #    - PGID= ${GID}
+  #    - TZ= ${TZ}
+  #  volumes:
+  #    - ./config/jackett:/config
+  #    - ${external_storage}/downloads:/downloads
+  #  ports:
+  #    - 8888:9117
+  #  labels:
+  #    - "traefik.http.routers.jackett.rule=Host(`jackett.${hostname}`)"
+  #    - "traefik.http.routers.jackett.entrypoints=websecure"
+  #    - "traefik.http.routers.jackett.tls.certresolver=myresolver"
+  #  restart: unless-stopped
+#
+#
+  ## https://hub.docker.com/r/lsiocommunity/organizr
   organizr:
     image: lsiocommunity/organizr
     container_name: organizr
@@ -377,9 +382,13 @@ services:
     ports:
       - 8889:80
     labels:
-      - "traefik.http.routers.organizr.rule=Host(`organizr.${hostname}`)"
+      - "traefik.enable=true"
+      - "traefik.http.routers.organizr.rule=Host(`${hostname}`) && PathPrefix(`/organizr`)"
+      - "traefik.http.middlewares.organizr-strip.stripprefix.prefixes=/organizr"
+      - "traefik.http.routers.organizr.middlewares=organizr-strip"
       - "traefik.http.routers.organizr.entrypoints=websecure"
       - "traefik.http.routers.organizr.tls.certresolver=myresolver"
+      - "traefik.http.services.organizr.loadbalancer.server.port=80"
     restart: unless-stopped
 
   # https://github.com/containrrr/watchtower
@@ -397,27 +406,27 @@ services:
     command: --interval 300 --cleanup
 
   # https://hub.docker.com/r/linuxserver/plex/
-  plex:
-    image: linuxserver/plex
-    container_name: plex
-    environment:
-      - PUID=${PID}
-      - PGID=${GID}
-      - VERSION=docker
-    volumes:
-      - ./config/plex:/config
-      - ${external_storage}/media/tv:/data/tvshows
-      - ${external_storage}/media/movies:/data/movies
-      - ${external_storage}/media/music:/data/music
-      - ./transcode:/transcode
-    ports:
-      - '32400:32400'
-      - '32400:32400/udp'
-      - '32469:32469'
-      - '32469:32469/udp'
+  #plex:
+  #  image: linuxserver/plex
+  #  container_name: plex
+  #  environment:
+  #    - PUID=${PID}
+  #    - PGID=${GID}
+  #    - VERSION=docker
+  #  volumes:
+  #    - ./config/plex:/config
+  #    - ${external_storage}/media/tv:/data/tvshows
+  #    - ${external_storage}/media/movies:/data/movies
+  #    - ${external_storage}/media/music:/data/music
+  #    - ./transcode:/transcode
+  #  ports:
+  #    - '32400:32400'
+  #    - '32400:32400/udp'
+  #    - '32469:32469'
+  #    - '32469:32469/udp'
       #- '5353:5353/udp'
-      - '1900:1900/udp'
-    restart: unless-stopped
+  #    - '1900:1900/udp'
+  #  restart: unless-stopped
 
 #  tautulli:
 #    image: tautulli/tautulli
@@ -472,6 +481,7 @@ services:
     ports:
       - 8903:8200
     labels:
+      - "traefik.enable=true"
       - "traefik.http.routers.duplicati.rule=Host(`duplicati.${hostname}`)"
       - "traefik.http.routers.duplicati.entrypoints=websecure"
       - "traefik.http.routers.duplicati.tls.certresolver=myresolver"
@@ -510,12 +520,13 @@ services:
       - POSTGRES_ADMIN_USER=postgres
       - POSTGRES_ADMIN_PASS=${postgres_pass}
       - RESTYA_DB_USERNAME=restya
-      - RESTYA_DB_USERPASS=restya
+      - RESTYA_DB_USERPASS=restyadbpasswordchangeme
       - RESTYA_DB=restyaboard
         #- SMTP_SERVER=smtp_relay
         #- SMTP_PORT=587
       - TZ=${TZ}
     labels:
+      - "traefik.enable=true"
       - "traefik.http.routers.restyaboard.rule=Host(`kanban.${hostname}`)"
       - "traefik.http.routers.restyaboard.entrypoints=websecure"
       - "traefik.http.routers.restyaboard.tls.certresolver=myresolver"
@@ -532,15 +543,16 @@ services:
     ports:
       - 9998:587
     labels:
+      - "traefik.enable=true"
       - "traefik.http.routers.smtp.rule=Host(`smtp.${hostname}`)"
       - "traefik.http.routers.smtp.entrypoints=websecure"
       - "traefik.http.routers.smtp.tls.certresolver=myresolver"
     restart: unless-stopped
 
-  #Database for restyaboard
+  #Database
   postgres:
     container_name: postgres
-    image: postgres:12-alpine
+    image: postgres:13-alpine
     ports:
       - 8909:5432
     labels:
@@ -562,25 +574,26 @@ services:
     ports:
       - 8905:8080
     labels:
+      - "traefik.enable=true"
       - "traefik.http.routers.adminer.rule=Host(`adminer.${hostname}`)"
       - "traefik.http.routers.adminer.entrypoints=websecure"
       - "traefik.http.routers.adminer.tls.certresolver=myresolver"
     restart: unless-stopped
 
-  homeassistant:
-    container_name: home-assistant
-    image: homeassistant/home-assistant:stable
-    volumes:
-      - ./config/homeassistant:/config
-    ports:
-      - 8906:8123
-    environment:
-      - TZ=${TZ}
-    labels:
-      - "traefik.http.routers.homeassistant.rule=Host(`smarthome.${hostname}`)"
-      - "traefik.http.routers.homeassistant.entrypoints=websecure"
-      - "traefik.http.routers.homeassistant.tls.certresolver=myresolver"
-    restart: always
+  #homeassistant:
+  #  container_name: home-assistant
+  #  image: homeassistant/home-assistant:stable
+  #  volumes:
+  #    - ./config/homeassistant:/config
+  #  ports:
+  #    - 8906:8123
+  #  environment:
+  #    - TZ=${TZ}
+  #  labels:
+  #    - "traefik.http.routers.homeassistant.rule=Host(`smarthome.${hostname}`)"
+  #    - "traefik.http.routers.homeassistant.entrypoints=websecure"
+  #    - "traefik.http.routers.homeassistant.tls.certresolver=myresolver"
+  #  restart: always
 
   sftp:
     image: atmoz/sftp
@@ -589,33 +602,51 @@ services:
     ports:
         - "2222:22"
     labels:
+      - "traefik.enable=true"
       - "traefik.http.routers.sftp.rule=Host(`sftp.${hostname}`)"
       - "traefik.http.routers.sftp.entrypoints=websecure"
       - "traefik.http.routers.sftp.tls.certresolver=myresolver"
     command: foo:Olakase12:1001
 
-  openhab:
-    container_name: openhab
-    image: "openhab/openhab:2.5.6"
-    restart: always
-    ports:
-      - "8908:8080"
+  #openhab:
+  #  container_name: openhab
+  #  image: "openhab/openhab:2.5.6"
+  #  restart: always
+  #  ports:
+  #    - "8908:8080"
       #- "8443:8443"
+  #  volumes:
+  #    - "./config/openhab/addons:/openhab/addons"
+  #    - "./config/openhab/conf:/openhab/conf"
+  #    - "./config/openhab/userdata:/openhab/userdata"
+  #  environment:
+  #    OPENHAB_HTTP_PORT: "8080"
+  #    OPENHAB_HTTPS_PORT: "8443"
+  #    EXTRA_JAVA_OPTS: "-Duser.timezone=${TZ}"
+  #  labels:
+  #    - "traefik.http.routers.openhab.rule=Host(`openhab.${hostname}`)"
+  #    - "traefik.http.routers.openhab.entrypoints=websecure"
+  #    - "traefik.http.routers.openhab.tls.certresolver=myresolver"
+  #    - "traefik.http.services.openhab.loadbalancer.server.port=8080"
+  
+  crontab-ui:
+    #build: .
+    container_name: crontab-ui
+    image: alseambusher/crontab-ui:latest
+    ports:
+      - 8989:8000
     volumes:
-      - "./config/openhab/addons:/openhab/addons"
-      - "./config/openhab/conf:/openhab/conf"
-      - "./config/openhab/userdata:/openhab/userdata"
+      - "/etc/cron.d:/etc/crontabs"
     environment:
-      OPENHAB_HTTP_PORT: "8080"
-      OPENHAB_HTTPS_PORT: "8443"
-      EXTRA_JAVA_OPTS: "-Duser.timezone=${TZ}"
+      - BASIC_AUTH_USER=admin
+      - BASIC_AUTH_PWD=${crontab_pass}
     labels:
-      - "traefik.http.routers.openhab.rule=Host(`openhab.${hostname}`)"
-      - "traefik.http.routers.openhab.entrypoints=websecure"
-      - "traefik.http.routers.openhab.tls.certresolver=myresolver"
-      - "traefik.http.services.openhab.loadbalancer.server.port=8080"
-
+      - "traefik.enable=true"
+      - "traefik.http.routers.crontab-ui.rule=Host(`cron.${hostname}`)"
+      - "traefik.http.routers.crontab-ui.entrypoints=websecure"
+      - "traefik.http.routers.crontab-ui.tls.certresolver=myresolver"
+      - "traefik.http.services.crontab-ui.loadbalancer.server.port=8000"
 networks:
   default:
     external:
-      name: nextcloud_network
+      name: docker_infra_net
