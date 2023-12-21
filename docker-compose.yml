@@ -78,7 +78,7 @@ services:
   netdata:
     container_name: netdata
     image: netdata/netdata
-    hostname: ${hostname}   
+    hostname: ${hostname}
     ports:
       - 19999:19999
     cap_add:
@@ -95,7 +95,9 @@ services:
       - PGID=999
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.netdata.rule=Host(`monitor.${hostname}`)"
+      - "traefik.http.routers.netdata.rule=Host(`${hostname}`) && PathPrefix(`/netdata/`)"
+      - "traefik.http.middlewares.netdata-strip.stripprefix.prefixes=/netdata"
+      - "traefik.http.routers.netdata.middlewares=netdata-strip"
       - "traefik.http.routers.netdata.entrypoints=websecure"
       - "traefik.http.routers.netdata.tls.certresolver=myresolver"
       - "traefik.http.services.netdata.loadbalancer.server.port=19999"
@@ -144,14 +146,14 @@ services:
     hostname: ${hostname}
     image: pihole/pihole:latest   
     ports:
-      - '53:53/tcp'
-      - '53:53/udp'
+      - 192.168.0.94:53:53/tcp  #Host IP needs to be set here otherwise the other containers can't resolve DNS
+      - 192.168.0.94:53:53/udp
       # - '67:67/udp'
       - '8001:80'
       - '8002:443'
     volumes:
       - ./config/pihole/pihole:/etc/pihole
-      - ./config/pihole/lighttpd:/etc/lighttpd
+      - ./config/pihole/my-external.conf:/etc/lighttpd/external.conf
       # - ${USERDIR}/docker/pihole/pihole.log:/var/log/pihole.log #Uncomment to make logs persistent
       - ./config/pihole/dnsmasq.d:/etc/dnsmasq.d
     cap_add:
@@ -234,7 +236,9 @@ services:
       - 8883:8083
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.biblioteca.rule=Host(`biblioteca.${hostname}`)"
+      - "traefik.http.routers.biblioteca.rule=Host(`${hostname}`) && PathPrefix(`/biblioteca/`)"
+      - "traefik.http.middlewares.biblioteca-strip.stripprefix.prefixes=/biblioteca"
+      - "traefik.http.routers.biblioteca.middlewares=biblioteca-strip"
       - "traefik.http.routers.biblioteca.entrypoints=websecure"
       - "traefik.http.routers.biblioteca.tls.certresolver=myresolver"
     restart: unless-stopped
@@ -262,7 +266,9 @@ services:
       - 51413:51413/udp
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.transmission.rule=Host(`transmission.${hostname}`)"
+      - "traefik.http.routers.transmission.rule=Host(`${hostname}`) && PathPrefix(`/transmission/`)"
+      - "traefik.http.middlewares.transmission-strip.stripprefix.prefixes=/transmission"
+      - "traefik.http.routers.transmission.middlewares=transmission-strip"
       - "traefik.http.routers.transmission.entrypoints=websecure"
       - "traefik.http.routers.transmission.tls.certresolver=myresolver"
     restart: unless-stopped
@@ -636,16 +642,47 @@ services:
     ports:
       - 8989:8000
     volumes:
-      - "/etc/cron.d:/etc/crontabs"
+       - /var/run/docker.sock:/var/run/docker.sock #need to run docker in docker
+       - ./config/crontab-ui/scripts:/crontab-ui/scripts 
+       - ./config/crontab-ui/backups:/crontab-ui/crontabs 
+#      - "/etc/cron.d:/etc/crontabs" #Uncomment this to have your cron set in the host machine
+    command: sh -c "apk add docker && supervisord -c /etc/supervisord.conf"
     environment:
+      - BASE_URL=/crontab
       - BASIC_AUTH_USER=admin
       - BASIC_AUTH_PWD=${crontab_pass}
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.crontab-ui.rule=Host(`cron.${hostname}`)"
+      - "traefik.http.routers.crontab-ui.rule=Host(`${hostname}`) && PathPrefix(`/crontab`)"
       - "traefik.http.routers.crontab-ui.entrypoints=websecure"
       - "traefik.http.routers.crontab-ui.tls.certresolver=myresolver"
       - "traefik.http.services.crontab-ui.loadbalancer.server.port=8000"
+
+  speedtest:
+    container_name: speedtest
+    image: henrywhitaker3/speedtest-tracker
+    ports:
+      - 8990:80
+    volumes:
+      - ./config/speedtest:/config
+    environment:
+      - TZ=${TZ}
+      - PGID=${GID}
+      - PUID=${PID}
+      - OOKLA_EULA_GDPR=true
+      - APP_URL=https://marcpascu.com/speedtest
+      - BASE_PATH=/speedtest
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "10"
+        max-size: "200k"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.speedtest.rule=Host(`${hostname}`) && PathPrefix(`/speedtest/`)"
+      - "traefik.http.routers.speedtest.entrypoints=websecure"
+      - "traefik.http.routers.speedtest.tls.certresolver=myresolver"
+    restart: unless-stopped
 networks:
   default:
     external:
