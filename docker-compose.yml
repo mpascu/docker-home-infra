@@ -378,9 +378,11 @@ services:
 #
   ## https://hub.docker.com/r/lsiocommunity/organizr
   organizr:
-    image: lsiocommunity/organizr
+    image: organizr/organizr
     container_name: organizr
     environment:
+      - fpm=true
+      - branch=v2-master
       - PUID=${PID}
       - PGID=${GID}
     volumes:
@@ -639,6 +641,7 @@ services:
     #build: .
     container_name: crontab-ui
     image: alseambusher/crontab-ui:latest
+    restart: always
     ports:
       - 8989:8000
     volumes:
@@ -648,6 +651,7 @@ services:
 #      - "/etc/cron.d:/etc/crontabs" #Uncomment this to have your cron set in the host machine
     command: sh -c "apk add docker && supervisord -c /etc/supervisord.conf"
     environment:
+      - TZ=${TZ}
       - BASE_URL=/crontab
       - BASIC_AUTH_USER=admin
       - BASIC_AUTH_PWD=${crontab_pass}
@@ -683,6 +687,44 @@ services:
       - "traefik.http.routers.speedtest.entrypoints=websecure"
       - "traefik.http.routers.speedtest.tls.certresolver=myresolver"
     restart: unless-stopped
+
+  uptime-kuma:
+    container_name: uptime-kuma
+    image: louislam/uptime-kuma:1
+    ports:
+      - 8991:3001
+    dns:
+      - 192.168.0.94
+    volumes:
+      - ./config/uptime-kuma:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - UPTIME_KUMA_DISABLE_FRAME_SAMEORIGIN=true
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kuma.rule=Host(`kuma.${hostname}`)"
+      - "traefik.http.routers.kuma.entrypoints=websecure"
+      - "traefik.http.routers.kuma.tls.certresolver=myresolver"
+    restart: unless-stopped
+
+  homarr:
+    container_name: homarr
+    image: ghcr.io/ajnart/homarr:latest
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # Optional, only if you want docker integration
+      - ./config/homarr/configs:/app/data/configs
+      - ./config/homarr/icons:/app/public/icons
+      - ./config/homarr/data:/data
+    ports:
+      - '7575:7575'
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.homarr.rule=Host(`${hostname}`)"
+      - "traefik.http.routers.homarr.entrypoints=websecure"
+      - "traefik.http.routers.homarr.tls.certresolver=myresolver"
+
+
 networks:
   default:
     external:
