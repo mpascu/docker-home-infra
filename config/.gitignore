@@ -1,0 +1,3 @@
+# Gitignore to keep the config directory folder but not the files inside it
+*
+!.gitignore

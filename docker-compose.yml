@@ -1,11 +1,13 @@
-version: '3' 
+include:
+  - ai.yml
+  - smarthome.yml
 
 services:
 
   #Reverse proxy to route conections from each subdomain to the corresponding container
   #Automate certificate creation and renewal for all docker containers that are proxied enabling HTTPS
   reverse_proxy:
-    image: traefik:v2.9.5
+    image: traefik:v3.3.4
     container_name: traefik
     restart: always
     command:
@@ -28,22 +30,31 @@ services:
       - ./config/traefik/config.yml:/config.yml:ro
     dns:
         - 8.8.8.8
-    network_mode: "bridge"
+        - 1.1.1.1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1G"
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway" #This lets traefik route to the host for docker containers runing on host network like homeassistant
 
   # Database for nextcloud
   #https://hub.docker.com/_/mariadb
-  #mariadb:
-  #  image: mariadb
-  #  container_name: nextcloud-mariadb
-  #  volumes:
-  #    - ./config/nextcloud-mariadb:/var/lib/mysql
-  #    - /etc/localtime:/etc/localtime:ro
-  #  environment:
-  #    - MYSQL_ROOT_PASSWORD=${mysql_root_pass}
-  #    - MYSQL_PASSWORD=${mysql_user_pass}
-  #    - MYSQL_DATABASE=nextcloud
-  #    - MYSQL_USER=nextcloud
-  #  restart: unless-stopped
+  mariadb:
+    image: mariadb
+    container_name: nextcloud-mariadb
+    volumes:
+      - ./config/nextcloud-mariadb:/var/lib/mysql
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - 3333:3306
+    environment:
+      - MYSQL_ROOT_PASSWORD=${mysql_root_pass}
+      - MYSQL_PASSWORD=${mysql_user_pass}
+      - MYSQL_DATABASE=nextcloud
+      - MYSQL_USER=nextcloud
+    restart: unless-stopped
   
   #File host and share
   #https://hub.docker.com/_/nextcloud/
@@ -391,9 +402,10 @@ services:
       - 8889:80
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.organizr.rule=Host(`${hostname}`) && PathPrefix(`/organizr`)"
-      - "traefik.http.middlewares.organizr-strip.stripprefix.prefixes=/organizr"
-      - "traefik.http.routers.organizr.middlewares=organizr-strip"
+      - "traefik.http.routers.organizr.rule=Host(`${hostname}`)"
+      #- "traefik.http.routers.organizr.rule=Host(`${hostname}`) && PathPrefix(`/organizr`)"
+      #- "traefik.http.middlewares.organizr-strip.stripprefix.prefixes=/organizr"
+      #- "traefik.http.routers.organizr.middlewares=organizr-strip"
       - "traefik.http.routers.organizr.entrypoints=websecure"
       - "traefik.http.routers.organizr.tls.certresolver=myresolver"
       - "traefik.http.services.organizr.loadbalancer.server.port=80"
@@ -587,22 +599,7 @@ services:
       - "traefik.http.routers.adminer.entrypoints=websecure"
       - "traefik.http.routers.adminer.tls.certresolver=myresolver"
     restart: unless-stopped
-
-  #homeassistant:
-  #  container_name: home-assistant
-  #  image: homeassistant/home-assistant:stable
-  #  volumes:
-  #    - ./config/homeassistant:/config
-  #  ports:
-  #    - 8906:8123
-  #  environment:
-  #    - TZ=${TZ}
-  #  labels:
-  #    - "traefik.http.routers.homeassistant.rule=Host(`smarthome.${hostname}`)"
-  #    - "traefik.http.routers.homeassistant.entrypoints=websecure"
-  #    - "traefik.http.routers.homeassistant.tls.certresolver=myresolver"
-  #  restart: always
-
+    
   sftp:
     image: atmoz/sftp
     volumes:
@@ -614,28 +611,7 @@ services:
       - "traefik.http.routers.sftp.rule=Host(`sftp.${hostname}`)"
       - "traefik.http.routers.sftp.entrypoints=websecure"
       - "traefik.http.routers.sftp.tls.certresolver=myresolver"
-    command: foo:Olakase12:1001
-
-  #openhab:
-  #  container_name: openhab
-  #  image: "openhab/openhab:2.5.6"
-  #  restart: always
-  #  ports:
-  #    - "8908:8080"
-      #- "8443:8443"
-  #  volumes:
-  #    - "./config/openhab/addons:/openhab/addons"
-  #    - "./config/openhab/conf:/openhab/conf"
-  #    - "./config/openhab/userdata:/openhab/userdata"
-  #  environment:
-  #    OPENHAB_HTTP_PORT: "8080"
-  #    OPENHAB_HTTPS_PORT: "8443"
-  #    EXTRA_JAVA_OPTS: "-Duser.timezone=${TZ}"
-  #  labels:
-  #    - "traefik.http.routers.openhab.rule=Host(`openhab.${hostname}`)"
-  #    - "traefik.http.routers.openhab.entrypoints=websecure"
-  #    - "traefik.http.routers.openhab.tls.certresolver=myresolver"
-  #    - "traefik.http.services.openhab.loadbalancer.server.port=8080"
+    command: foo:changeme:1001
   
   crontab-ui:
     #build: .
@@ -694,38 +670,32 @@ services:
     ports:
       - 8991:3001
     dns:
-      - 192.168.0.94
+      - 8.8.8.8
     volumes:
       - ./config/uptime-kuma:/app/data
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - UPTIME_KUMA_DISABLE_FRAME_SAMEORIGIN=true
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.kuma.rule=Host(`kuma.${hostname}`)"
-      - "traefik.http.routers.kuma.entrypoints=websecure"
-      - "traefik.http.routers.kuma.tls.certresolver=myresolver"
     restart: unless-stopped
 
   homarr:
     container_name: homarr
-    image: ghcr.io/ajnart/homarr:latest
+    image: ghcr.io/homarr-labs/homarr:latest
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock # Optional, only if you want docker integration
-      - ./config/homarr/configs:/app/data/configs
-      - ./config/homarr/icons:/app/public/icons
-      - ./config/homarr/data:/data
+      - ./config/homarr/appdata:/appdata
+    environment:
+      - SECRET_ENCRYPTION_KEY=8f3d626bf0873341a0001e3a4c7ebcaa8b94c4389a1387eaea9533f2e272df9f
     ports:
       - '7575:7575'
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.homarr.rule=Host(`${hostname}`)"
+      - "traefik.http.routers.homarr.rule=Host(`home.${hostname}`)"
       - "traefik.http.routers.homarr.entrypoints=websecure"
       - "traefik.http.routers.homarr.tls.certresolver=myresolver"
 
 
 networks:
-  default:
-    external:
-      name: docker_infra_net
+  docker_infra_net:
+    driver: bridge

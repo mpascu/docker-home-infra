@@ -1,0 +1,108 @@
+services:
+  homeassistant:
+    container_name: home-assistant
+    image: ghcr.io/home-assistant/home-assistant:stable
+    volumes:
+      - ./config/homeassistant:/config
+      - /etc/localtime:/etc/localtime:ro
+      - /run/dbus:/run/dbus:ro
+    environment:
+      - TZ=${TZ}
+    ports:
+      - 8123:8123
+    privileged: true
+    network_mode: host
+    restart: unless-stopped
+
+  whisper:
+    container_name: whisper
+    image: rhasspy/wyoming-whisper
+    volumes:
+      - ./config/whisper:/data
+    ports:
+      - 10300:10300
+    entrypoint: bash /run.sh --model small-int8 --language ca
+    restart: unless-stopped
+
+  zigbee2mqtt:
+    container_name: zigbee2mqtt
+    image: ghcr.io/koenkk/zigbee2mqtt
+    restart: unless-stopped
+    volumes:
+        - ./config/zigbee2mqtt:/app/data
+        - /run/udev:/run/udev:ro
+    ports:
+        # Frontend port
+        - 6637:8080
+    environment:
+        - TZ=Europe/Berlin
+
+  mqtt-broker:
+    image: eclipse-mosquitto
+    container_name: mqtt-broker
+    ports:
+      - 1883:1883 #default mqtt port
+      - 9001:9001 #default mqtt port for websockets
+    volumes:
+      - ./config/mosquitto/config:/mosquitto/config:rw
+      - ./config/mosquitto/data:/mosquitto/data:rw
+      - ./config/mosquitto/log:/mosquitto/log:rw
+    restart: unless-stopped
+
+  openwakeword:
+    container_name: openwakeword
+    image: rhasspy/wyoming-openwakeword
+    volumes:
+      - ./config/openwakeword/models:/custom
+    ports:
+      - 10400:10400
+    restart: unless-stopped
+    command: --custom-model-dir /custom
+
+  piper:
+    container_name: piper
+    image: rhasspy/wyoming-piper
+    volumes:
+      - ./config/piper/data:/data
+    ports:
+      - 10200:10200
+    restart: unless-stopped
+    command: --voice ca_ES-upc_ona-medium
+    
+  music-assistant-server:
+    image: ghcr.io/music-assistant/server:latest
+    container_name: music-assistant-server
+    restart: unless-stopped
+    # Network mode must be set to host for MA to work correctly
+    network_mode: host
+    volumes:
+      - ./config/music-assistant-server:/data/
+    # privileged caps (and security-opt) needed to mount smb folders within the container
+    cap_add:
+      - SYS_ADMIN
+      - DAC_READ_SEARCH
+    security_opt:
+      - apparmor:unconfined
+    environment:
+      # Provide logging level as environment variable.
+      # default=info, possible=(critical, error, warning, info, debug)
+      - LOG_LEVEL=info
+
+  esphome:
+    image: esphome/esphome
+    container_name: esphome
+    volumes:
+      - ./config/esphome:/config:rw
+      # Use local time for logging timestamps
+      - /etc/localtime:/etc/localtime:ro
+    privileged: true
+    network_mode: host
+    restart: always
+#    devices:
+#      - /dev/ttyUSB0:/dev/ttyUSB0
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.esphome.rule=Host(`esphome.${hostname}`)"
+      - "traefik.http.services.esphome.loadbalancer.server.port=6052"
+      - "traefik.http.routers.esphome.entrypoints=websecure"
+      - "traefik.http.routers.esphome.tls.certresolver=myresolver"

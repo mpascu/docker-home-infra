@@ -38,7 +38,6 @@ This repo consists mainly in a docker-composed file ready to spin up a bunch of 
 ## Prerequisites:
 	- Some domain
 	- Docker installed
-	- Docker-compose installed
 
 ## Installation
  1. Create docker network
@@ -48,7 +47,7 @@ This repo consists mainly in a docker-composed file ready to spin up a bunch of 
  2. Setup the credentials and storage path in .env file
  3. Launch docker compose setup
     ```bash
-    docker-compose up -d
+    docker compose up -d
     ```
 
 ## Post-instalation configuration
