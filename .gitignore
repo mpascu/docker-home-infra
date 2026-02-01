@@ -1,6 +1,2 @@
-app/
-proxy/
-.calibre-web/
-heimdall/
-pihole/
+.env
 .vscode/

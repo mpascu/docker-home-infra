@@ -1,6 +1,7 @@
 include:
   - ai.yml
   - smarthome.yml
+#  - media.yml # Uncomment this to enable media management services
 
 services:
 
@@ -190,6 +191,7 @@ services:
       - "traefik.http.services.pihole.loadbalancer.server.port=80"
     restart: unless-stopped
   
+  # Remote desktop gateway https://hub.docker.com/r/oznu/guacamole
   guacamole:
     image: oznu/guacamole
     container_name: guacamole
@@ -284,109 +286,7 @@ services:
       - "traefik.http.routers.transmission.tls.certresolver=myresolver"
     restart: unless-stopped
 
-  # https://hub.docker.com/r/linuxserver/bazarr
-  #bazarr:
-  #  image: linuxserver/bazarr
-  #  container_name: bazarr
-  #  environment:
-  #    - PUID= ${PID}
-  #    - PGID= ${GID}
-  #    - TZ= ${TZ}
-  #    - VIRTUAL_HOST=bazarr.${hostname}
-  #    - VIRTUAL_PORT=6767
-  #    - LETSENCRYPT_HOST=bazarr.${hostname}
-  #    - LETSENCRYPT_EMAIL=${mail}
-  #  volumes:
-  #    - ./config/bazarr:/config
-  #    - ${external_storage}/media/movies:/movies
-  #    - ${external_storage}/media/tv:/tv
-  #  ports:
-  #    - 8884:6767
-  #  networks:
-  #    - default
-  #  restart: unless-stopped
-
-  # https://hub.docker.com/r/linuxserver/sonarr
-  #sonarr:
-  #  image: linuxserver/sonarr
-  #  container_name: sonarr
-  #  environment:
-  #    - PUID= ${PID}
-  #    - PGID= ${GID}
-  #    - TZ= ${TZ}
-  #  volumes:
-  #    - ./config/sonarr:/config
-  #    - ${external_storage}/media/tv:/tv
-  #    - ${external_storage}/downloads:/downloads
-  #  ports:
-  #    - 8885:8989
-  #  labels:
-  #    - "traefik.http.routers.sonarr.rule=Host(`sonarr.${hostname}`)"
-  #    - "traefik.http.routers.sonarr.entrypoints=websecure"
-  #    - "traefik.http.routers.sonarr.tls.certresolver=myresolver"
-  #  restart: unless-stopped
-
-  # https://hub.docker.com/r/linuxserver/radarr
-  #radarr:
-  #  image: linuxserver/radarr
-  #  container_name: radarr
-  #  environment:
-  #    - PUID= ${PID}
-  #    - PGID= ${GID}
-  #    - TZ= ${TZ}
-  #  volumes:
-  #    - ./config/radarr:/config
-  #    - ${external_storage}/media/movies:/movies
-  #    - ${external_storage}/downloads:/downloads
-  #  ports:
-  #    - 8886:7878
-  #  labels:
-  #    - "traefik.http.routers.radarr.rule=Host(`radarr.${hostname}`)"
-  #    - "traefik.http.routers.radarr.entrypoints=websecure"
-  #    - "traefik.http.routers.radarr.tls.certresolver=myresolver"
-  #  restart: unless-stopped
-#
-  ## https://hub.docker.com/r/linuxserver/lidarr
-  #lidarr:
-  #  image: linuxserver/lidarr
-  #  container_name: lidarr
-  #  environment:
-  #    - PUID= ${PID}
-  #    - PGID= ${GID}
-  #    - TZ= ${TZ}
-  #  volumes:
-  #    - ./config/lidarr:/config
-  #    - ${external_storage}/media/music:/music
-  #    - ${external_storage}/downloads:/downloads
-  #  ports:
-  #    - 8887:8686
-  #  labels:
-  #    - "traefik.http.routers.lidarr.rule=Host(`lidarr.${hostname}`)"
-  #    - "traefik.http.routers.lidarr.entrypoints=websecure"
-  #    - "traefik.http.routers.lidarr.tls.certresolver=myresolver"
-  #  restart: unless-stopped
-#
-  ## https://hub.docker.com/r/linuxserver/jackett
-  #jackett:
-  #  image: linuxserver/jackett
-  #  container_name: jackett
-  #  hostname: jackett
-  #  environment:
-  #    - PUID= ${PID}
-  #    - PGID= ${GID}
-  #    - TZ= ${TZ}
-  #  volumes:
-  #    - ./config/jackett:/config
-  #    - ${external_storage}/downloads:/downloads
-  #  ports:
-  #    - 8888:9117
-  #  labels:
-  #    - "traefik.http.routers.jackett.rule=Host(`jackett.${hostname}`)"
-  #    - "traefik.http.routers.jackett.entrypoints=websecure"
-  #    - "traefik.http.routers.jackett.tls.certresolver=myresolver"
-  #  restart: unless-stopped
-#
-#
+  
   ## https://hub.docker.com/r/lsiocommunity/organizr
   organizr:
     image: organizr/organizr
@@ -411,7 +311,7 @@ services:
       - "traefik.http.services.organizr.loadbalancer.server.port=80"
     restart: unless-stopped
 
-  # https://github.com/containrrr/watchtower
+  # Watchtower to keep the containers up to date https://github.com/containrrr/watchtower
   watchtower:
     image: containrrr/watchtower
     container_name: watchtower
@@ -424,68 +324,8 @@ services:
       - ~/.docker/config.json:/config.json:ro
     restart: unless-stopped
     command: --interval 300 --cleanup
-
-  # https://hub.docker.com/r/linuxserver/plex/
-  #plex:
-  #  image: linuxserver/plex
-  #  container_name: plex
-  #  environment:
-  #    - PUID=${PID}
-  #    - PGID=${GID}
-  #    - VERSION=docker
-  #  volumes:
-  #    - ./config/plex:/config
-  #    - ${external_storage}/media/tv:/data/tvshows
-  #    - ${external_storage}/media/movies:/data/movies
-  #    - ${external_storage}/media/music:/data/music
-  #    - ./transcode:/transcode
-  #  ports:
-  #    - '32400:32400'
-  #    - '32400:32400/udp'
-  #    - '32469:32469'
-  #    - '32469:32469/udp'
-      #- '5353:5353/udp'
-  #    - '1900:1900/udp'
-  #  restart: unless-stopped
-
-#  tautulli:
-#    image: tautulli/tautulli
-#    container_name: tautulli
-#    environment:
-#      - PUID=${PID}
-#      - PGID=${GID}
-#      - TZ=${TZ}
-#      - VIRTUAL_HOST=tautulli.${hostname}
-#      - VIRTUAL_PORT=8181
-#      - LETSENCRYPT_HOST=tautulli.${hostname}
-#      - LETSENCRYPT_EMAIL=${mail}
-#    volumes:
-#      - ./config/tautulli:/config
-#      - ./config/plex/Library/Application Support/Plex Media Server/Logs:/logs:ro
-#    ports:
-#      - 8901:8181
-#    depends_on:
-#      - plex
-#    restart: unless-stopped
-
-#  ombi:
-#    image: linuxserver/ombi
-#    container_name: ombi
-#    environment:
-#      - PUID=${PID}
-#      - PGID=${GID}
-#      - TZ=${TZ}
-#      - VIRTUAL_HOST=ombi.${hostname}
-#      - VIRTUAL_PORT=3579
-#      - LETSENCRYPT_HOST=ombi.${hostname}
-#      - LETSENCRYPT_EMAIL=${mail}
-#    volumes:
-#      - ./config/ombi:/config
-#    ports:
-#      - 8902:3579
-#    restart: unless-stopped
   
-  #Backup software
+  #Backup scheduler
   #https://www.duplicati.com/
   duplicati:
     image: linuxserver/duplicati
@@ -506,21 +346,6 @@ services:
       - "traefik.http.routers.duplicati.entrypoints=websecure"
       - "traefik.http.routers.duplicati.tls.certresolver=myresolver"
     restart: unless-stopped
-
-#  gitpod:
-#    image: gitpod/workspace-full
-#    container_name: gitpod
-#    depends_on:
-#      - letsencrypt
-#      - proxy
-#    ports:
-#      - 8000:8000
-#    environment:
-#      - TZ=${TZ}
-#      - VIRTUAL_HOST=ide.${hostname}
-#      - LETSENCRYPT_HOST=ide.${hostname}
-#      - LETSENCRYPT_EMAIL=${mail}
-#    restart: unless-stopped
 
   #Kanban board
   #https://hub.docker.com/r/restyaplatform/restyaboard
@@ -550,6 +375,8 @@ services:
       - "traefik.http.routers.restyaboard.rule=Host(`kanban.${hostname}`)"
       - "traefik.http.routers.restyaboard.entrypoints=websecure"
       - "traefik.http.routers.restyaboard.tls.certresolver=myresolver"
+    profiles:
+      - DONOTDEPLOY
     restart: always
 
   # Mail sender, needed to send mail for registration and password recovery

@@ -33,7 +33,6 @@ This repo consists mainly in a docker-composed file ready to spin up a bunch of 
 - sftp: FTP server
 - Postfix: Mail sender
 - [HomeAssistant](https://www.home-assistant.io/): Open source home automation that puts local control and privacy first. Powered by a worldwide community of tinkerers and DIY enthusiasts. 
-- [OpenHab](https://www.openhab.org/): a vendor and technology agnostic open source automation software for your home.
 
 ## Prerequisites:
 	- Some domain
