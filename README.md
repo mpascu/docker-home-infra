@@ -1,90 +1,134 @@
-# docker-home-infra 
-This repo consists mainly in a docker-composed file ready to spin up a bunch of useful media, file-sharing, programming, web tools, databases... All the persistent data is stored in the ./config folder and Duplicati is provided in order to backup all data.
+# 🏠 SmartHomeStack
+A docker-compose stack to deploy a full homelab with media management, smart home automation, monitoring, and utility services. All persistent data is stored in the `./config` folder and Duplicati is provided for backups.
 
-## Screenshots
+## 📸 Screenshots
 
-![heimdall sceenshot](https://raw.githubusercontent.com/mpascu/docker-home-infra/master/heimdall.png)
+![Heimdall screenshot](https://raw.githubusercontent.com/mpascu/SmartHomeStack/master/heimdall.png)
 
-![Organizr sceenshot](https://raw.githubusercontent.com/mpascu/docker-home-infra/master/organizr.png)
+![Organizr screenshot](https://raw.githubusercontent.com/mpascu/SmartHomeStack/master/organizr.png)
 
-## Tools included:
+## 🧰 Tools included
 
-- [Traefik](https://traefik.io/): Reverse proxy to be in front of all web services
-- [Nextcloud](https://nextcloud.com/): Nextcloud is the most deployed on-premises file share and collaboration platform. 
-- [MariaDB](https://mariadb.org/): Database required by nextcloud
-- [Organizr](https://github.com/causefx/Organizr): Organizr allows you to setup "Tabs" that will be loaded all in one webpage. 
-- [Pi-hole](https://pi-hole.net/): The Pi-hole® is a DNS sinkhole that protects your devices from unwanted content, without installing any client-side software.
-- [Heimdall](https://heimdall.site/): Heimdall Application Dashboard is a dashboard for all your web applications.
-- [Calibre](https://calibre-ebook.com/): calibre is a powerful and easy to use e-book manager
-- [Calibre-web](https://github.com/janeczku/calibre-web): Calibre-Web is a web app providing a clean interface for browsing, reading and downloading eBooks using an existing Calibre database.
-- [Portainer](https://www.portainer.io/): allows you to easily build, manage and maintain Docker environments. 
-- [Netdata](https://www.netdata.cloud/): Instantly diagnose slowdowns and anomalies in your infrastructure with thousands of metrics, interactive visualizations, and insightful health alarms.
-- [Guacamole](https://guacamole.apache.org/): clientless, web-based remote desktop gateway. It supports standard protocols like VNC, RDP, and SSH.
-- [Transmission](https://transmissionbt.com/): BitTorrent client.
-- [Restyaboard](https://restya.com/board): Kanban board, management tool.
-- [Duplicati](https://www.duplicati.com/): Backup tool
-- [Postgresql](https://www.postgresql.org/): Database needed for Restyaboard
-- [Adminer](https://www.adminer.org/): Database management tool.
-- Bazarr, Sonarr, Radarr, Lidarr: download managers
-- Jackett: indexer scrapping
-- [Plex](https://www.plex.tv/): Media file organizer and streamer.
-- [Watchtower](https://github.com/containrrr/watchtower): A process for automating Docker container base image updates.
-- [Duplicati](https://www.duplicati.com/): Free backup software to store encrypted backups online. Configured to backup the persistent data of the other containers.
-- sftp: FTP server
-- Postfix: Mail sender
-- [HomeAssistant](https://www.home-assistant.io/): Open source home automation that puts local control and privacy first. Powered by a worldwide community of tinkerers and DIY enthusiasts. 
+### 🔧 Core Infrastructure (`docker-compose.yml`)
+- [Traefik](https://traefik.io/): Reverse proxy with automatic HTTPS certificate management
+- [Pi-hole](https://pi-hole.net/): DNS sinkhole that blocks ads and malware
+- [MariaDB](https://mariadb.org/): Database for Nextcloud
+- [PostgreSQL](https://www.postgresql.org/): Database for Restyaboard
+- [Adminer](https://www.adminer.org/): Database management UI
+- [Postfix](https://hub.docker.com/r/boky/postfix): SMTP relay for sending emails
+- SFTP: File transfer server
 
-## Prerequisites:
-	- Some domain
-	- Docker installed
+### 📊 Dashboards & Management
+- [Heimdall](https://heimdall.site/): Application dashboard
+- [Organizr](https://github.com/causefx/Organizr): Unified tab interface for all services
+- [Homarr](https://homarr.dev/): Modern dashboard with Docker integration
+- [Portainer](https://www.portainer.io/): Docker container management UI
 
-## Installation
- 1. Create docker network
-    ```bash
-    docker network create nextcloud_network
-    ```
- 2. Setup the credentials and storage path in .env file
- 3. Launch docker compose setup
-    ```bash
-    docker compose up -d
-    ```
+### 📈 Monitoring & Maintenance
+- [Netdata](https://www.netdata.cloud/): Real-time system performance monitoring
+- [Uptime Kuma](https://github.com/louislam/uptime-kuma): Service uptime monitoring
+- [Speedtest Tracker](https://github.com/henrywhitaker3/speedtest-tracker): Internet speed history
+- [Watchtower](https://github.com/containrrr/watchtower): Automatic container updates
+- [Duplicati](https://www.duplicati.com/): Encrypted backup scheduler
+- [Crontab UI](https://github.com/alseambusher/crontab-ui): Web-based cron job manager
 
-## Post-instalation configuration
+### 🔌 Remote Access & Utilities
+- [Guacamole](https://guacamole.apache.org/): Web-based remote desktop (VNC, RDP, SSH)
+- [Transmission](https://transmissionbt.com/): BitTorrent client
+- [Calibre](https://calibre-ebook.com/): E-book manager
+- [Calibre-web](https://github.com/janeczku/calibre-web): Web interface for Calibre library
+- [Restyaboard](https://restya.com/board): Kanban board
 
- 1. First, disable and stop Ubuntu's DNS resolver using the following two commands, otherwise pi-hole can't start because port 53 will be in use:
-    ```bash
-    sudo systemctl disable systemd-resolved.service
-    sudo systemctl stop systemd-resolved.service
-    ```
-    Open network manager configuration using the following command for editing:
-    ```bash
-	sudo nano /etc/NetworkManager/NetworkManager.conf
-    ```
-    Add dns=default under [main] so that the file contents look like what is shown below:
-    ```
-		[main]
-		plugins=ifupdown,keyfile
-		dns=default
-    ```
-	Then, remove or even better rename /etc/resolv.conf file (it is a symbolic link) using the the following command:
-    ```bash
-	sudo mv /etc/resolv.conf /etc/resolv.conf.bak
+### 💡 Smart Home (`smarthome.yml`)
+- [Home Assistant](https://www.home-assistant.io/): Open source home automation
+- [Zigbee2mqtt](https://www.zigbee2mqtt.io/): Zigbee device bridge
+- [Mosquitto](https://mosquitto.org/): MQTT broker
+- [ESPHome](https://esphome.io/): ESP device configuration and management
+- [Music Assistant](https://music-assistant.io/): Music streaming server
+- [Whisper](https://github.com/rhasspy/wyoming-whisper): Speech-to-text for voice control
+- [Piper](https://github.com/rhasspy/piper): Text-to-speech engine
+- [OpenWakeWord](https://github.com/rhasspy/wyoming-openwakeword): Wake word detection
 
-	restart your network manager using the following command.
+### 🎬 Media Management (`media.yml`)
+- [Plex](https://www.plex.tv/): Media server and streamer
+- [Tautulli](https://tautulli.com/): Plex monitoring and statistics
+- [Ombi](https://ombi.io/): Media request management
+- [Sonarr](https://sonarr.tv/): TV series manager
+- [Radarr](https://radarr.video/): Movie manager
+- [Lidarr](https://lidarr.audio/): Music manager
+- [Bazarr](https://www.bazarr.media/): Subtitle manager
+- [Jackett](https://github.com/Jackett/Jackett): Torrent indexer proxy
 
-	sudo service network-manager restart
-    ```
+### 🤖 AI (`ai.yml`)
+- [Open WebUI](https://github.com/open-webui/open-webui): Chat interface for LLMs
 
- 2. Set your domain as trusted domain on Nextcloud config
-	If you try to access your nextcloud instance right now, you will receive a message telling that this is not a trusted domain. To fix this you should setup your domain in two parameters of the file "app/config/config.php": first one under 'trusted_domains' =>  and the other one at 'overwrite.cli.url'
+## ✅ Prerequisites
+- A domain name
+- Docker and Docker Compose installed
 
-    Setting up External Storage
-    ```
-    'check_data_directory_permissions' => false,
-    ```
-    Needed to go through the reverse proxy:
-    ```
-    ‘overwriteprotocol’ => ‘https’,
-    ```
+## 🚀 Installation
+1. Copy `.env.example` to `.env` and configure credentials and storage paths
+2. Launch the stack:
+   ```bash
+   docker compose up -d
+   ```
 
-3. IMPORTANT: Remember to setup passwords at first deployment to sonarr, radarr and lidarr, otherwise they will be exposed to the internet without password. 
+## ⚙️ Enabling/Disabling Services
+
+### Optional compose files
+The stack is split into multiple compose files. By default only `docker-compose.yml`, `smarthome.yml`, and `ai.yml` are included. To enable media services, uncomment the `media.yml` include in `docker-compose.yml`:
+```yaml
+include:
+  - ai.yml
+  - smarthome.yml
+  - media.yml  # Uncomment to enable
+```
+
+### Disabling individual services
+To disable a specific service without removing it from the compose file, add the `DONOTDEPLOY` profile:
+```yaml
+myservice:
+  image: someimage
+  profiles:
+    - DONOTDEPLOY
+  # ... rest of config
+```
+Services with this profile will be skipped during `docker compose up` unless explicitly requested.
+
+## 🔨 Post-installation configuration
+
+### Pi-hole DNS setup (Ubuntu/Debian)
+Disable the system DNS resolver so Pi-hole can bind to port 53:
+```bash
+sudo systemctl disable systemd-resolved.service
+sudo systemctl stop systemd-resolved.service
+```
+Edit NetworkManager config:
+```bash
+sudo nano /etc/NetworkManager/NetworkManager.conf
+```
+Add `dns=default` under `[main]`:
+```
+[main]
+plugins=ifupdown,keyfile
+dns=default
+```
+Rename the existing resolv.conf and restart NetworkManager:
+```bash
+sudo mv /etc/resolv.conf /etc/resolv.conf.bak
+sudo service network-manager restart
+```
+
+### Nextcloud trusted domain
+Add your domain to `config/nextcloud/config/config.php`:
+- Under `'trusted_domains'`
+- At `'overwrite.cli.url'`
+
+For external storage and reverse proxy support, also add:
+```php
+'check_data_directory_permissions' => false,
+'overwriteprotocol' => 'https',
+```
+
+### Media services security
+⚠️ **Important:** Set up authentication on Sonarr, Radarr, and Lidarr immediately after first deployment, otherwise they will be exposed without password protection.
