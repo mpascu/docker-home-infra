@@ -1,6 +1,24 @@
 # 🏠 SmartHomeStack
 A docker-compose stack to deploy a full homelab with media management, smart home automation, monitoring, and utility services. All persistent data is stored in the `./config` folder and Duplicati is provided for backups.
 
+## 📁 Repository Structure
+
+```
+SmartHomeStack/
+├── docker-compose.yml      # Main compose file (core infrastructure)
+├── compose/                # Additional service modules
+│   ├── ai.yml              # AI services (Open WebUI, Ollama)
+│   ├── dashboards.yml      # Dashboards (Heimdall, Organizr, Homarr)
+│   ├── ebooks.yml          # E-book management (Calibre, Calibre-web)
+│   ├── smarthome.yml       # Smart home (Home Assistant, Zigbee, MQTT)
+│   └── media.yml           # Media management (Plex, Sonarr, Radarr, etc.)
+├── config/                 # Persistent data for all services (gitignored)
+├── scripts/                # Helper scripts
+│   └── Makefile            # Common operations (up, down, update, logs, etc.)
+├── .env.example            # Environment variables template
+└── README.md
+```
+
 ## 📸 Screenshots
 
 ![Heimdall screenshot](https://raw.githubusercontent.com/mpascu/SmartHomeStack/master/heimdall.png)
@@ -18,10 +36,12 @@ A docker-compose stack to deploy a full homelab with media management, smart hom
 - [Postfix](https://hub.docker.com/r/boky/postfix): SMTP relay for sending emails
 - SFTP: File transfer server
 
-### 📊 Dashboards & Management
+### 📊 Dashboards (`compose/dashboards.yml`)
 - [Heimdall](https://heimdall.site/): Application dashboard
 - [Organizr](https://github.com/causefx/Organizr): Unified tab interface for all services
 - [Homarr](https://homarr.dev/): Modern dashboard with Docker integration
+
+### 🐳 Docker Management
 - [Portainer](https://www.portainer.io/): Docker container management UI
 
 ### 📈 Monitoring & Maintenance
@@ -35,11 +55,13 @@ A docker-compose stack to deploy a full homelab with media management, smart hom
 ### 🔌 Remote Access & Utilities
 - [Guacamole](https://guacamole.apache.org/): Web-based remote desktop (VNC, RDP, SSH)
 - [Transmission](https://transmissionbt.com/): BitTorrent client
-- [Calibre](https://calibre-ebook.com/): E-book manager
-- [Calibre-web](https://github.com/janeczku/calibre-web): Web interface for Calibre library
 - [Restyaboard](https://restya.com/board): Kanban board
 
-### 💡 Smart Home (`smarthome.yml`)
+### 📚 E-books (`compose/ebooks.yml`)
+- [Calibre](https://calibre-ebook.com/): E-book manager
+- [Calibre-web](https://github.com/janeczku/calibre-web): Web interface for Calibre library
+
+### 💡 Smart Home (`compose/smarthome.yml`)
 - [Home Assistant](https://www.home-assistant.io/): Open source home automation
 - [Zigbee2mqtt](https://www.zigbee2mqtt.io/): Zigbee device bridge
 - [Mosquitto](https://mosquitto.org/): MQTT broker
@@ -49,7 +71,7 @@ A docker-compose stack to deploy a full homelab with media management, smart hom
 - [Piper](https://github.com/rhasspy/piper): Text-to-speech engine
 - [OpenWakeWord](https://github.com/rhasspy/wyoming-openwakeword): Wake word detection
 
-### 🎬 Media Management (`media.yml`)
+### 🎬 Media Management (`compose/media.yml`)
 - [Plex](https://www.plex.tv/): Media server and streamer
 - [Tautulli](https://tautulli.com/): Plex monitoring and statistics
 - [Ombi](https://ombi.io/): Media request management
@@ -59,7 +81,7 @@ A docker-compose stack to deploy a full homelab with media management, smart hom
 - [Bazarr](https://www.bazarr.media/): Subtitle manager
 - [Jackett](https://github.com/Jackett/Jackett): Torrent indexer proxy
 
-### 🤖 AI (`ai.yml`)
+### 🤖 AI (`compose/ai.yml`)
 - [Open WebUI](https://github.com/open-webui/open-webui): Chat interface for LLMs
 
 ## ✅ Prerequisites
@@ -68,20 +90,33 @@ A docker-compose stack to deploy a full homelab with media management, smart hom
 
 ## 🚀 Installation
 1. Copy `.env.example` to `.env` and configure credentials and storage paths
-2. Launch the stack:
+2. Generate a secure key for Homarr: `openssl rand -hex 32`
+3. Launch the stack:
    ```bash
    docker compose up -d
    ```
 
+## 🛠️ Helper Commands
+A Makefile is provided in `scripts/` for common operations:
+```bash
+cd scripts
+make up        # Start all services
+make down      # Stop all services
+make logs      # Follow logs for all services
+make update    # Pull latest images and restart
+make status    # Show container status
+make help      # Show all available commands
+```
+
 ## ⚙️ Enabling/Disabling Services
 
 ### Optional compose files
-The stack is split into multiple compose files. By default only `docker-compose.yml`, `smarthome.yml`, and `ai.yml` are included. To enable media services, uncomment the `media.yml` include in `docker-compose.yml`:
+The stack is split into multiple compose files in the `compose/` folder. By default, `smarthome.yml` and `ai.yml` are included. To enable media services, uncomment the `media.yml` include in `docker-compose.yml`:
 ```yaml
 include:
-  - ai.yml
-  - smarthome.yml
-  - media.yml  # Uncomment to enable
+  - compose/ai.yml
+  - compose/smarthome.yml
+  - compose/media.yml  # Uncomment to enable
 ```
 
 ### Disabling individual services

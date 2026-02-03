@@ -1,6 +1,6 @@
 # Media management services
-
-# Media server and streamer https://hub.docker.com/r/linuxserver/plex/
+services:
+  # Media server and streamer
   plex:
     image: linuxserver/plex
     container_name: plex
@@ -9,21 +9,19 @@
       - PGID=${GID}
       - VERSION=docker
     volumes:
-      - ./config/plex:/config
+      - ../config/plex:/config
       - ${external_storage}/media/tv:/data/tvshows
       - ${external_storage}/media/movies:/data/movies
       - ${external_storage}/media/music:/data/music
-      - ./transcode:/transcode
+      - ../transcode:/transcode
     ports:
       - '32400:32400'
       - '32400:32400/udp'
       - '32469:32469'
       - '32469:32469/udp'
-      #- '5353:5353/udp'
-  #    - '1900:1900/udp'
     restart: unless-stopped
 
-# Plex media server monitor https://hub.docker.com/r/tautulli/tautulli
+  # Plex media server monitor
   tautulli:
     image: tautulli/tautulli
     container_name: tautulli
@@ -31,20 +29,21 @@
       - PUID=${PID}
       - PGID=${GID}
       - TZ=${TZ}
-      - VIRTUAL_HOST=tautulli.${hostname}
-      - VIRTUAL_PORT=8181
-      - LETSENCRYPT_HOST=tautulli.${hostname}
-      - LETSENCRYPT_EMAIL=${mail}
     volumes:
-      - ./config/tautulli:/config
-      - ./config/plex/Library/Application Support/Plex Media Server/Logs:/logs:ro
+      - ../config/tautulli:/config
+      - ../config/plex/Library/Application Support/Plex Media Server/Logs:/logs:ro
     ports:
       - 8901:8181
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.tautulli.rule=Host(`tautulli.${hostname}`)"
+      - "traefik.http.routers.tautulli.entrypoints=websecure"
+      - "traefik.http.routers.tautulli.tls.certresolver=myresolver"
     depends_on:
       - plex
     restart: unless-stopped
 
-# Request manager https://hub.docker.com/r/linuxserver/ombi
+  # Request manager
   ombi:
     image: linuxserver/ombi
     container_name: ombi
@@ -52,114 +51,118 @@
       - PUID=${PID}
       - PGID=${GID}
       - TZ=${TZ}
-      - VIRTUAL_HOST=ombi.${hostname}
-      - VIRTUAL_PORT=3579
-      - LETSENCRYPT_HOST=ombi.${hostname}
-      - LETSENCRYPT_EMAIL=${mail}
     volumes:
-      - ./config/ombi:/config
+      - ../config/ombi:/config
     ports:
       - 8902:3579
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ombi.rule=Host(`ombi.${hostname}`)"
+      - "traefik.http.routers.ombi.entrypoints=websecure"
+      - "traefik.http.routers.ombi.tls.certresolver=myresolver"
     restart: unless-stopped
 
-# Subtitle manager and downloader https://hub.docker.com/r/linuxserver/bazarr
+  # Subtitle manager and downloader
   bazarr:
     image: linuxserver/bazarr
     container_name: bazarr
     environment:
-      - PUID= ${PID}
-      - PGID= ${GID}
-      - TZ= ${TZ}
-      - VIRTUAL_HOST=bazarr.${hostname}
-      - VIRTUAL_PORT=6767
-      - LETSENCRYPT_HOST=bazarr.${hostname}
-      - LETSENCRYPT_EMAIL=${mail}
+      - PUID=${PID}
+      - PGID=${GID}
+      - TZ=${TZ}
     volumes:
-      - ./config/bazarr:/config
+      - ../config/bazarr:/config
       - ${external_storage}/media/movies:/movies
       - ${external_storage}/media/tv:/tv
     ports:
       - 8884:6767
-    networks:
-      - default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.bazarr.rule=Host(`bazarr.${hostname}`)"
+      - "traefik.http.routers.bazarr.entrypoints=websecure"
+      - "traefik.http.routers.bazarr.tls.certresolver=myresolver"
     restart: unless-stopped
 
-# TV series manager and downloader https://hub.docker.com/r/linuxserver/sonarr
+  # TV series manager and downloader
   sonarr:
     image: linuxserver/sonarr
     container_name: sonarr
     environment:
-      - PUID= ${PID}
-      - PGID= ${GID}
-      - TZ= ${TZ}
+      - PUID=${PID}
+      - PGID=${GID}
+      - TZ=${TZ}
     volumes:
-      - ./config/sonarr:/config
+      - ../config/sonarr:/config
       - ${external_storage}/media/tv:/tv
       - ${external_storage}/downloads:/downloads
     ports:
       - 8885:8989
     labels:
+      - "traefik.enable=true"
       - "traefik.http.routers.sonarr.rule=Host(`sonarr.${hostname}`)"
       - "traefik.http.routers.sonarr.entrypoints=websecure"
       - "traefik.http.routers.sonarr.tls.certresolver=myresolver"
     restart: unless-stopped
 
-# Movie manager and downloader https://hub.docker.com/r/linuxserver/radarr
+  # Movie manager and downloader
   radarr:
     image: linuxserver/radarr
     container_name: radarr
     environment:
-      - PUID= ${PID}
-      - PGID= ${GID}
-      - TZ= ${TZ}
+      - PUID=${PID}
+      - PGID=${GID}
+      - TZ=${TZ}
     volumes:
-      - ./config/radarr:/config
+      - ../config/radarr:/config
       - ${external_storage}/media/movies:/movies
       - ${external_storage}/downloads:/downloads
     ports:
       - 8886:7878
     labels:
+      - "traefik.enable=true"
       - "traefik.http.routers.radarr.rule=Host(`radarr.${hostname}`)"
       - "traefik.http.routers.radarr.entrypoints=websecure"
       - "traefik.http.routers.radarr.tls.certresolver=myresolver"
     restart: unless-stopped
-# Music manager and downloader https://hub.docker.com/r/linuxserver/lidarr https://hub.docker.com/r/linuxserver/lidarr
+
+  # Music manager and downloader
   lidarr:
     image: linuxserver/lidarr
     container_name: lidarr
     environment:
-      - PUID= ${PID}
-      - PGID= ${GID}
-      - TZ= ${TZ}
+      - PUID=${PID}
+      - PGID=${GID}
+      - TZ=${TZ}
     volumes:
-      - ./config/lidarr:/config
+      - ../config/lidarr:/config
       - ${external_storage}/media/music:/music
       - ${external_storage}/downloads:/downloads
     ports:
       - 8887:8686
     labels:
+      - "traefik.enable=true"
       - "traefik.http.routers.lidarr.rule=Host(`lidarr.${hostname}`)"
       - "traefik.http.routers.lidarr.entrypoints=websecure"
       - "traefik.http.routers.lidarr.tls.certresolver=myresolver"
     restart: unless-stopped
 
-# Torrent client and indexer https://hub.docker.com/r/linuxserver/jackett
+  # Torrent indexer proxy
   jackett:
     image: linuxserver/jackett
     container_name: jackett
     hostname: jackett
     environment:
-      - PUID= ${PID}
-      - PGID= ${GID}
-      - TZ= ${TZ}
+      - PUID=${PID}
+      - PGID=${GID}
+      - TZ=${TZ}
     volumes:
-      - ./config/jackett:/config
+      - ../config/jackett:/config
       - ${external_storage}/downloads:/downloads
     ports:
       - 8888:9117
     labels:
+      - "traefik.enable=true"
       - "traefik.http.routers.jackett.rule=Host(`jackett.${hostname}`)"
       - "traefik.http.routers.jackett.entrypoints=websecure"
       - "traefik.http.routers.jackett.tls.certresolver=myresolver"
     restart: unless-stopped
-

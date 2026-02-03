@@ -1,0 +1,61 @@
+# Dashboard services
+services:
+  # Application dashboard
+  heimdall:
+    image: linuxserver/heimdall
+    container_name: heimdall
+    environment:
+      - PUID=${PID}
+      - PGID=${GID}
+      - TZ=${TZ}
+    volumes:
+      - ../config/heimdall:/config
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.heimdall.rule=Host(`${hostname}`)"
+      - "traefik.http.routers.heimdall.entrypoints=websecure"
+      - "traefik.http.routers.heimdall.tls.certresolver=myresolver"
+    restart: unless-stopped
+    profiles:
+      - DONOTDEPLOY
+
+  # Unified tab interface
+  organizr:
+    image: organizr/organizr
+    container_name: organizr
+    environment:
+      - fpm=true
+      - branch=v2-master
+      - PUID=${PID}
+      - PGID=${GID}
+    volumes:
+      - ../config/organizr:/config
+    ports:
+      - 8889:80
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.organizr.rule=Host(`${hostname}`)"
+      - "traefik.http.routers.organizr.entrypoints=websecure"
+      - "traefik.http.routers.organizr.tls.certresolver=myresolver"
+      - "traefik.http.services.organizr.loadbalancer.server.port=80"
+    restart: unless-stopped
+    profiles:
+      - DONOTDEPLOY
+
+  # Modern dashboard with Docker integration
+  homarr:
+    container_name: homarr
+    image: ghcr.io/homarr-labs/homarr:latest
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ../config/homarr/appdata:/appdata
+    environment:
+      - SECRET_ENCRYPTION_KEY=${homarr_secret}
+    ports:
+      - '7575:7575'
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.homarr.rule=Host(`home.${hostname}`)"
+      - "traefik.http.routers.homarr.entrypoints=websecure"
+      - "traefik.http.routers.homarr.tls.certresolver=myresolver"

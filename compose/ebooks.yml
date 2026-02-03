@@ -1,0 +1,47 @@
+# E-book management services
+services:
+  # E-book manager
+  calibre:
+    image: linuxserver/calibre
+    container_name: calibre
+    environment:
+      - PUID=${PID}
+      - PGID=${GID}
+      - TZ=${TZ}
+      - GUAC_PASS=${calibre_pass}
+      - UMASK_SET=022
+    volumes:
+      - ${internal_storage}/BIBLIOTECA/calibre-library:/config
+    ports:
+      - 8880:8080
+      - 8881:8081
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.calibre.rule=Host(`calibre.${hostname}`)"
+      - "traefik.http.routers.calibre.entrypoints=websecure"
+      - "traefik.http.routers.calibre.tls.certresolver=myresolver"
+      - "traefik.http.services.calibre.loadbalancer.server.port=8080"
+    restart: unless-stopped
+
+  # E-book web library
+  calibre-web:
+    image: linuxserver/calibre-web
+    container_name: calibre-web
+    environment:
+      - PUID=${PID}
+      - PGID=${GID}
+      - TZ=${TZ}
+      - DOCKER_MODS=linuxserver/calibre-web:calibre
+    volumes:
+      - ../config/calibre-web:/config
+      - ${internal_storage}/BIBLIOTECA/calibre-library:/books
+    ports:
+      - 8883:8083
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.biblioteca.rule=Host(`${hostname}`) && PathPrefix(`/biblioteca/`)"
+      - "traefik.http.middlewares.biblioteca-strip.stripprefix.prefixes=/biblioteca"
+      - "traefik.http.routers.biblioteca.middlewares=biblioteca-strip"
+      - "traefik.http.routers.biblioteca.entrypoints=websecure"
+      - "traefik.http.routers.biblioteca.tls.certresolver=myresolver"
+    restart: unless-stopped

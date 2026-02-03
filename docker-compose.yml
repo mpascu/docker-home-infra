@@ -1,7 +1,9 @@
 include:
-  - ai.yml
-  - smarthome.yml
-#  - media.yml # Uncomment this to enable media management services
+  - compose/ai.yml
+  - compose/smarthome.yml
+  - compose/dashboards.yml
+  - compose/ebooks.yml
+#  - compose/media.yml  # Uncomment to enable media management services
 
 networks:
   default:
@@ -138,23 +140,6 @@ services:
       - "traefik.http.services.portainer.loadbalancer.server.port=9000"
     restart: always
 
-  #Application dashboard
-  #https://hub.docker.com/r/linuxserver/heimdall/
-  heimdall:
-    image: linuxserver/heimdall
-    container_name: heimdall
-    environment:
-      - PUID=${PID}
-      - PGID=${GID}
-      - TZ=${TZ}
-    volumes:
-      - ./config/heimdall:/config
-    labels:
-      - "traefik.http.routers.heimdall.rule=Host(`${hostname}`)"
-      - "traefik.http.routers.heimdall.entrypoints=websecure"
-      - "traefik.http.routers.heimdall.tls.certresolver=myresolver"
-    restart: unless-stopped
-
   #DNS sinkhole, blocks ads, malware, spam
   #https://hub.docker.com/r/pihole/pihole/
   pihole:
@@ -212,55 +197,6 @@ services:
       - "traefik.http.services.guacamole.loadbalancer.server.port=8080"
     restart: unless-stopped
 
-  # Ebook manager
-  #https://hub.docker.com/r/linuxserver/calibre
-  calibre:
-    image: linuxserver/calibre
-    container_name: calibre
-    environment:
-      - PUID=${PID}
-      - PGID=${GID}
-      - TZ=${TZ}
-      - GUAC_USER=${calibre_user} 
-      - GUAC_PASS=${calibre_pass} 
-      - UMASK_SET=022
-    volumes:
-      - ${internal_storage}/BIBLIOTECA/calibre-library:/config
-    ports:
-      - 8880:8080
-      - 8881:8081
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.calibre.rule=Host(`calibre.${hostname}`)"
-      - "traefik.http.routers.calibre.entrypoints=websecure"
-      - "traefik.http.routers.calibre.tls.certresolver=myresolver"
-      - "traefik.http.services.calibre.loadbalancer.server.port=8080"
-    restart: unless-stopped
-  
-  # Ebook library
-  #https://hub.docker.com/r/linuxserver/calibre-web
-  calibre-web:
-    image: linuxserver/calibre-web
-    container_name: calibre-web
-    environment:
-      - PUID=${PID}
-      - PGID=${GID}
-      - TZ=${TZ}
-      - DOCKER_MODS=linuxserver/calibre-web:calibre
-    volumes:
-      - ./config/calibre-web:/config
-      - ${internal_storage}/BIBLIOTECA/calibre-library:/books
-    ports:
-      - 8883:8083
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.biblioteca.rule=Host(`${hostname}`) && PathPrefix(`/biblioteca/`)"
-      - "traefik.http.middlewares.biblioteca-strip.stripprefix.prefixes=/biblioteca"
-      - "traefik.http.routers.biblioteca.middlewares=biblioteca-strip"
-      - "traefik.http.routers.biblioteca.entrypoints=websecure"
-      - "traefik.http.routers.biblioteca.tls.certresolver=myresolver"
-    restart: unless-stopped
-
   # Torrent client
   # https://hub.docker.com/r/linuxserver/transmission
   transmission:
@@ -289,31 +225,6 @@ services:
       - "traefik.http.routers.transmission.middlewares=transmission-strip"
       - "traefik.http.routers.transmission.entrypoints=websecure"
       - "traefik.http.routers.transmission.tls.certresolver=myresolver"
-    restart: unless-stopped
-
-  
-  ## https://hub.docker.com/r/lsiocommunity/organizr
-  organizr:
-    image: organizr/organizr
-    container_name: organizr
-    environment:
-      - fpm=true
-      - branch=v2-master
-      - PUID=${PID}
-      - PGID=${GID}
-    volumes:
-      - ./config/organizr:/config
-    ports:
-      - 8889:80
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.organizr.rule=Host(`${hostname}`)"
-      #- "traefik.http.routers.organizr.rule=Host(`${hostname}`) && PathPrefix(`/organizr`)"
-      #- "traefik.http.middlewares.organizr-strip.stripprefix.prefixes=/organizr"
-      #- "traefik.http.routers.organizr.middlewares=organizr-strip"
-      - "traefik.http.routers.organizr.entrypoints=websecure"
-      - "traefik.http.routers.organizr.tls.certresolver=myresolver"
-      - "traefik.http.services.organizr.loadbalancer.server.port=80"
     restart: unless-stopped
 
   # Watchtower to keep the containers up to date https://github.com/containrrr/watchtower
@@ -502,21 +413,3 @@ services:
     environment:
       - UPTIME_KUMA_DISABLE_FRAME_SAMEORIGIN=true
     restart: unless-stopped
-
-  homarr:
-    container_name: homarr
-    image: ghcr.io/homarr-labs/homarr:latest
-    restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock # Optional, only if you want docker integration
-      - ./config/homarr/appdata:/appdata
-    environment:
-      - SECRET_ENCRYPTION_KEY=${homarr_secret}
-    ports:
-      - '7575:7575'
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.homarr.rule=Host(`home.${hostname}`)"
-      - "traefik.http.routers.homarr.entrypoints=websecure"
-      - "traefik.http.routers.homarr.tls.certresolver=myresolver"
-
