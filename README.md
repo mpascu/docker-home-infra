@@ -10,6 +10,7 @@ SmartHomeStack/
 │   ├── ai.yml              # AI services (Open WebUI, Ollama)
 │   ├── dashboards.yml      # Dashboards (Heimdall, Organizr, Homarr)
 │   ├── ebooks.yml          # E-book management (Calibre, Calibre-web)
+│   ├── nextcloud.yml       # File hosting (Nextcloud + MariaDB)
 │   ├── smarthome.yml       # Smart home (Home Assistant, Zigbee, MQTT)
 │   └── media.yml           # Media management (Plex, Sonarr, Radarr, etc.)
 ├── config/                 # Persistent data for all services (gitignored)
@@ -30,11 +31,14 @@ SmartHomeStack/
 ### 🔧 Core Infrastructure (`docker-compose.yml`)
 - [Traefik](https://traefik.io/): Reverse proxy with automatic HTTPS certificate management
 - [Pi-hole](https://pi-hole.net/): DNS sinkhole that blocks ads and malware
-- [MariaDB](https://mariadb.org/): Database for Nextcloud
 - [PostgreSQL](https://www.postgresql.org/): Database for Restyaboard
 - [Adminer](https://www.adminer.org/): Database management UI
 - [Postfix](https://hub.docker.com/r/boky/postfix): SMTP relay for sending emails
 - SFTP: File transfer server
+
+### ☁️ File Hosting (`compose/nextcloud.yml`)
+- [Nextcloud](https://nextcloud.com/): Self-hosted file sync and share platform
+- [MariaDB](https://mariadb.org/): Database for Nextcloud
 
 ### 📊 Dashboards (`compose/dashboards.yml`)
 - [Heimdall](https://heimdall.site/): Application dashboard

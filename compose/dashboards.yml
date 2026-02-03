@@ -39,8 +39,6 @@ services:
       - "traefik.http.routers.organizr.tls.certresolver=myresolver"
       - "traefik.http.services.organizr.loadbalancer.server.port=80"
     restart: unless-stopped
-    profiles:
-      - DONOTDEPLOY
 
   # Modern dashboard with Docker integration
   homarr:

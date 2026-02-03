@@ -3,7 +3,8 @@ include:
   - compose/smarthome.yml
   - compose/dashboards.yml
   - compose/ebooks.yml
-#  - compose/media.yml  # Uncomment to enable media management services
+#  - compose/nextcloud.yml  # Uncomment to enable Nextcloud
+#  - compose/media.yml      # Uncomment to enable media management services
 
 networks:
   default:
@@ -45,52 +46,7 @@ services:
         max-size: "1G"
 
     extra_hosts:
-      - "host.docker.internal:host-gateway" #This lets traefik route to the host for docker containers runing on host network like homeassistant
-
-  # Database for nextcloud
-  #https://hub.docker.com/_/mariadb
-  mariadb:
-    image: mariadb
-    container_name: nextcloud-mariadb
-    volumes:
-      - ./config/nextcloud-mariadb:/var/lib/mysql
-      - /etc/localtime:/etc/localtime:ro
-    ports:
-      - 3333:3306
-    environment:
-      - MYSQL_ROOT_PASSWORD=${mysql_root_pass}
-      - MYSQL_PASSWORD=${mysql_user_pass}
-      - MYSQL_DATABASE=nextcloud
-      - MYSQL_USER=nextcloud
-    restart: unless-stopped
-  
-  #File host and share
-  #https://hub.docker.com/_/nextcloud/
-#  nextcloud:
-#    image: nextcloud:21
-#    container_name: nextcloud
-#    depends_on:
-#      - mariadb
-#    ports:
-#      - 9002:80
-#    volumes:
-#      - ./config/nextcloud/nextcloud:/var/www/html
-#      - ./config/nextcloud/config:/var/www/html/config
-#      - ./config/nextcloud/custom_apps:/var/www/html/custom_apps
-#      - ./config/nextcloud/data:/var/www/html/data
-#      - ./config/nextcloud/themes:/var/www/html/themes
-#      - /etc/localtime:/etc/localtime:ro
-#      - ${external_storage}:/media/EXT_4TB:rw
-#    environment:
-#      - VIRTUAL_HOST=cloud.${hostname}
-#      - LETSENCRYPT_HOST=cloud.${hostname}
-#      - LETSENCRYPT_EMAIL=${mail}
-#    labels:
-#      - "traefik.enable=true"
-#      - "traefik.http.routers.cloud.rule=Host(`cloud.${hostname}`)"
-#      - "traefik.http.routers.cloud.entrypoints=websecure"
-#      - "traefik.http.routers.cloud.tls.certresolver=myresolver"
-#    restart: unless-stopped
+      - "host.docker.internal:host-gateway"
 
   #System performance monitor
   #https://hub.docker.com/r/netdata/netdata

@@ -1,0 +1,45 @@
+# Nextcloud file hosting and sharing
+services:
+  # Database for Nextcloud
+  nextcloud-mariadb:
+    image: mariadb:11
+    container_name: nextcloud-mariadb
+    volumes:
+      - ../config/nextcloud-mariadb:/var/lib/mysql
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - 3333:3306
+    environment:
+      - MYSQL_ROOT_PASSWORD=${mysql_root_pass}
+      - MYSQL_PASSWORD=${mysql_user_pass}
+      - MYSQL_DATABASE=nextcloud
+      - MYSQL_USER=nextcloud
+    restart: unless-stopped
+
+  # File hosting and sharing platform
+  nextcloud:
+    image: nextcloud:latest
+    container_name: nextcloud
+    depends_on:
+      - nextcloud-mariadb
+    ports:
+      - 9002:80
+    volumes:
+      - ../config/nextcloud/nextcloud:/var/www/html
+      - ../config/nextcloud/config:/var/www/html/config
+      - ../config/nextcloud/custom_apps:/var/www/html/custom_apps
+      - ../config/nextcloud/data:/var/www/html/data
+      - ../config/nextcloud/themes:/var/www/html/themes
+      - /etc/localtime:/etc/localtime:ro
+      - ${external_storage}:/media/external:rw
+    environment:
+      - MYSQL_HOST=nextcloud-mariadb
+      - MYSQL_DATABASE=nextcloud
+      - MYSQL_USER=nextcloud
+      - MYSQL_PASSWORD=${mysql_user_pass}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.nextcloud.rule=Host(`cloud.${hostname}`)"
+      - "traefik.http.routers.nextcloud.entrypoints=websecure"
+      - "traefik.http.routers.nextcloud.tls.certresolver=myresolver"
+    restart: unless-stopped
