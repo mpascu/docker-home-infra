@@ -3,11 +3,16 @@ include:
   - smarthome.yml
 #  - media.yml # Uncomment this to enable media management services
 
+networks:
+  default:
+    name: smarthomestack
+    driver: bridge
+
 services:
 
   #Reverse proxy to route conections from each subdomain to the corresponding container
   #Automate certificate creation and renewal for all docker containers that are proxied enabling HTTPS
-  reverse_proxy:
+  traefik:
     image: traefik:v3.3.4
     container_name: traefik
     restart: always
@@ -515,7 +520,3 @@ services:
       - "traefik.http.routers.homarr.entrypoints=websecure"
       - "traefik.http.routers.homarr.tls.certresolver=myresolver"
 
-
-networks:
-  docker_infra_net:
-    driver: bridge
