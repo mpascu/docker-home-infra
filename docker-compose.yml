@@ -158,8 +158,8 @@ services:
     hostname: ${hostname}
     image: pihole/pihole:latest   
     ports:
-      - 192.168.0.94:53:53/tcp  #Host IP needs to be set here otherwise the other containers can't resolve DNS
-      - 192.168.0.94:53:53/udp
+      - ${SERVER_IP}:53:53/tcp #Host IP needs to be set here otherwise the other containers can't resolve DNS
+      - ${SERVER_IP}:53:53/udp
       # - '67:67/udp'
       - '8001:80'
       - '8002:443'
@@ -216,9 +216,9 @@ services:
       - PUID=${PID}
       - PGID=${GID}
       - TZ=${TZ}
-      - GUAC_USER=marc #optional
-      - GUAC_PASS=0711aae7867f68f983ba13ca7be91742 #md5 hashed password
-      - UMASK_SET=022 #optional
+      - GUAC_USER=${calibre_user} 
+      - GUAC_PASS=${calibre_pass} 
+      - UMASK_SET=022
     volumes:
       - ${internal_storage}/BIBLIOTECA/calibre-library:/config
     ports:
@@ -365,10 +365,8 @@ services:
       - POSTGRES_ADMIN_USER=postgres
       - POSTGRES_ADMIN_PASS=${postgres_pass}
       - RESTYA_DB_USERNAME=restya
-      - RESTYA_DB_USERPASS=restyadbpasswordchangeme
+      - RESTYA_DB_USERPASS=${restya_db_pass}
       - RESTYA_DB=restyaboard
-        #- SMTP_SERVER=smtp_relay
-        #- SMTP_PORT=587
       - TZ=${TZ}
     labels:
       - "traefik.enable=true"
@@ -430,15 +428,10 @@ services:
   sftp:
     image: atmoz/sftp
     volumes:
-        - ./config/sftp:/home/foo/upload
+        - ./config/sftp:/home/${sftp_user}/upload
     ports:
         - "2222:22"
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.sftp.rule=Host(`sftp.${hostname}`)"
-      - "traefik.http.routers.sftp.entrypoints=websecure"
-      - "traefik.http.routers.sftp.tls.certresolver=myresolver"
-    command: foo:changeme:1001
+    command: ${sftp_user}:${sftp_pass}:${PID}
   
   crontab-ui:
     #build: .
@@ -477,7 +470,7 @@ services:
       - PGID=${GID}
       - PUID=${PID}
       - OOKLA_EULA_GDPR=true
-      - APP_URL=https://marcpascu.com/speedtest
+      - APP_URL=https://${hostname}/speedtest
       - BASE_PATH=/speedtest
     logging:
       driver: "json-file"
@@ -513,7 +506,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock # Optional, only if you want docker integration
       - ./config/homarr/appdata:/appdata
     environment:
-      - SECRET_ENCRYPTION_KEY=8f3d626bf0873341a0001e3a4c7ebcaa8b94c4389a1387eaea9533f2e272df9f
+      - SECRET_ENCRYPTION_KEY=${homarr_secret}
     ports:
       - '7575:7575'
     labels:

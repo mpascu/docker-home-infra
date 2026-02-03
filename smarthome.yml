@@ -35,7 +35,7 @@ services:
         # Frontend port
         - 6637:8080
     environment:
-        - TZ=Europe/Berlin
+        - TZ=${TZ}
 
   mqtt-broker:
     image: eclipse-mosquitto
