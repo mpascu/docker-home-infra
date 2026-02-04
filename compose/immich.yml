@@ -1,0 +1,85 @@
+# Immich - Self-hosted photo and video management
+# Based on https://docs.immich.app/install/docker-compose/
+name: immich
+
+services:
+  immich-server:
+    container_name: immich_server
+    image: ghcr.io/immich-app/immich-server:${IMMICH_VERSION:-release}
+    # extends:
+    #   file: hwaccel.transcoding.yml
+    #   service: cpu # set to one of [nvenc, quicksync, rkmpp, vaapi, vaapi-wsl] for accelerated transcoding
+    volumes:
+      # Do not edit the next line. If you want to change the media storage location on your system, edit the value of UPLOAD_LOCATION in the .env file
+      - ${immich_upload_location}:/data
+      - /etc/localtime:/etc/localtime:ro
+    environment: # You can find documentation for all the supported env variables at https://docs.immich.app/install/environment-variables
+      - UPLOAD_LOCATION=${immich_upload_location}
+      - DB_DATA_LOCATION=../config/immich/postgres
+      - DB_PASSWORD=${immich_db_pass}
+      - DB_USERNAME=${immich_db_user}
+      - DB_DATABASE_NAME=${immich_db_name}
+      - TZ=${TZ}
+      - IMMICH_VERSION=${immich_version}
+    ports:
+      - '2283:2283'
+    depends_on:
+      - redis
+      - database
+    restart: always
+    healthcheck:
+      disable: false
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.immich.rule=Host(`photos.${hostname}`)"
+      - "traefik.http.routers.immich.entrypoints=websecure"
+      - "traefik.http.routers.immich.tls.certresolver=myresolver"
+      - "traefik.http.services.immich.loadbalancer.server.port=2283"
+
+  immich-machine-learning:
+    container_name: immich_machine_learning
+    # For hardware acceleration, add one of -[armnn, cuda, rocm, openvino, rknn] to the image tag.
+    # Example tag: ${IMMICH_VERSION:-release}-cuda
+    image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION:-release}
+    # extends: # uncomment this section for hardware acceleration - see https://docs.immich.app/features/ml-hardware-acceleration
+    #   file: hwaccel.ml.yml
+    #   service: cpu # set to one of [armnn, cuda, rocm, openvino, openvino-wsl, rknn] for accelerated inference - use the `-wsl` version for WSL2 where applicable
+    volumes:
+      - ../config/immich/model-cache:/cache
+    environment:
+      - UPLOAD_LOCATION=${immich_upload_location}
+      - DB_DATA_LOCATION=../config/immich/postgres
+      - DB_PASSWORD=${immich_db_pass}
+      - DB_USERNAME=${immich_db_user}
+      - DB_DATABASE_NAME=${immich_db_name}
+      - TZ=${TZ}
+      - IMMICH_VERSION=${immich_version}
+    restart: always
+    healthcheck:
+      disable: false
+
+  redis:
+    container_name: immich_redis
+    image: docker.io/valkey/valkey:9@sha256:546304417feac0874c3dd576e0952c6bb8f06bb4093ea0c9ca303c73cf458f63
+    healthcheck:
+      test: redis-cli ping || exit 1
+    restart: always
+
+  database:
+    container_name: immich_postgres
+    image: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0@sha256:bcf63357191b76a916ae5eb93464d65c07511da41e3bf7a8416db519b40b1c23
+    environment:
+      POSTGRES_PASSWORD: ${immich_db_pass}
+      POSTGRES_USER: ${immich_db_user}
+      POSTGRES_DB: ${immich_db_name}
+      POSTGRES_INITDB_ARGS: '--data-checksums'
+    volumes:
+      - ../config/immich/postgres:/var/lib/postgresql/data
+
+    shm_size: 128mb
+    restart: always
+    healthcheck:
+     disable: false 
+
+volumes:
+  model-cache:

@@ -11,6 +11,7 @@ SmartHomeStack/
 │   ├── dashboards.yml      # Dashboards (Heimdall, Organizr, Homarr)
 │   ├── ebooks.yml          # E-book management (Calibre, Calibre-web)
 │   ├── nextcloud.yml       # File hosting (Nextcloud + MariaDB)
+│   ├── immich.yml          # Photo management (Immich)
 │   ├── smarthome.yml       # Smart home (Home Assistant, Zigbee, MQTT)
 │   └── media.yml           # Media management (Plex, Sonarr, Radarr, etc.)
 ├── config/                 # Persistent data for all services (gitignored)
@@ -39,6 +40,9 @@ SmartHomeStack/
 ### ☁️ File Hosting (`compose/nextcloud.yml`)
 - [Nextcloud](https://nextcloud.com/): Self-hosted file sync and share platform
 - [MariaDB](https://mariadb.org/): Database for Nextcloud
+
+### 📷 Photo Management (`compose/immich.yml`)
+- [Immich](https://immich.app/): Self-hosted photo and video backup solution with ML-powered features
 
 ### 📊 Dashboards (`compose/dashboards.yml`)
 - [Heimdall](https://heimdall.site/): Application dashboard

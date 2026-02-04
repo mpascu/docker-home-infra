@@ -4,6 +4,7 @@ include:
   - compose/dashboards.yml
   - compose/ebooks.yml
 #  - compose/nextcloud.yml  # Uncomment to enable Nextcloud
+#  - compose/immich.yml     # Uncomment to enable Immich photo management
 #  - compose/media.yml      # Uncomment to enable media management services
 
 networks:
