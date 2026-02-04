@@ -84,7 +84,7 @@ services:
       - LOG_LEVEL=info
 
   esphome:
-    image: esphome/esphome
+    image: esphome/esphome:2026.1
     container_name: esphome
     volumes:
       - ../config/esphome:/config:rw

@@ -11,7 +11,7 @@ services:
     #   service: cpu # set to one of [nvenc, quicksync, rkmpp, vaapi, vaapi-wsl] for accelerated transcoding
     volumes:
       # Do not edit the next line. If you want to change the media storage location on your system, edit the value of UPLOAD_LOCATION in the .env file
-      - ${immich_upload_location}:/data
+      - ../config/immich/data:/data
       - /etc/localtime:/etc/localtime:ro
     environment: # You can find documentation for all the supported env variables at https://docs.immich.app/install/environment-variables
       - UPLOAD_LOCATION=${immich_upload_location}

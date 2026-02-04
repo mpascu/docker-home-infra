@@ -22,6 +22,8 @@ services:
       - "traefik.http.routers.calibre.tls.certresolver=myresolver"
       - "traefik.http.services.calibre.loadbalancer.server.port=8080"
     restart: unless-stopped
+    profiles:
+      - DONOTDEPLOY
 
   # E-book web library
   calibre-web:
@@ -45,3 +47,5 @@ services:
       - "traefik.http.routers.biblioteca.entrypoints=websecure"
       - "traefik.http.routers.biblioteca.tls.certresolver=myresolver"
     restart: unless-stopped
+    profiles:
+      - DONOTDEPLOY
