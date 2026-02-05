@@ -33,3 +33,55 @@ services:
       - "traefik.http.routers.openwebui.entrypoints=websecure"
       - "traefik.http.routers.openwebui.tls.certresolver=myresolver"
     restart: unless-stopped
+
+  openclaw-gateway:
+    image: ${OPENCLAW_IMAGE:-openclaw/openclaw:local}
+    container_name: openclaw-gateway
+    environment:
+      HOME: /home/node
+      TERM: xterm-256color
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+      CLAUDE_AI_SESSION_KEY: ${CLAUDE_AI_SESSION_KEY}
+      CLAUDE_WEB_SESSION_KEY: ${CLAUDE_WEB_SESSION_KEY}
+      CLAUDE_WEB_COOKIE: ${CLAUDE_WEB_COOKIE}
+    volumes:
+      - ${OPENCLAW_CONFIG_DIR:-../config/openclaw}:/home/node/.openclaw
+      - ${OPENCLAW_WORKSPACE_DIR:-../config/openclaw/workspace}:/home/node/.openclaw/workspace
+    ports:
+      - "${OPENCLAW_GATEWAY_PORT:-18789}:18789"
+      - "${OPENCLAW_BRIDGE_PORT:-18790}:18790"
+    init: true
+    restart: unless-stopped
+    command:
+      - "node"
+      - "dist/index.js"
+      - "gateway"
+      - "--bind"
+      - "${OPENCLAW_GATEWAY_BIND:-lan}"
+      - "--port"
+      - "18789"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.openclaw.rule=Host(`openclaw.${hostname}`)"
+      - "traefik.http.routers.openclaw.entrypoints=websecure"
+      - "traefik.http.routers.openclaw.tls.certresolver=myresolver"
+      - "traefik.http.services.openclaw.loadbalancer.server.port=18789"
+
+  openclaw-cli:
+    image: ${OPENCLAW_IMAGE:-openclaw/openclaw:local}
+    container_name: openclaw-cli
+    environment:
+      HOME: /home/node
+      TERM: xterm-256color
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+      BROWSER: echo
+      CLAUDE_AI_SESSION_KEY: ${CLAUDE_AI_SESSION_KEY}
+      CLAUDE_WEB_SESSION_KEY: ${CLAUDE_WEB_SESSION_KEY}
+      CLAUDE_WEB_COOKIE: ${CLAUDE_WEB_COOKIE}
+    volumes:
+      - ${OPENCLAW_CONFIG_DIR:-../config/openclaw}:/home/node/.openclaw
+      - ${OPENCLAW_WORKSPACE_DIR:-../config/openclaw/workspace}:/home/node/.openclaw/workspace
+    stdin_open: true
+    tty: true
+    init: true
+    entrypoint: ["node", "dist/index.js"]

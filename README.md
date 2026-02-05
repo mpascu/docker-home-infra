@@ -91,6 +91,7 @@ SmartHomeStack/
 
 ### 🤖 AI (`compose/ai.yml`)
 - [Open WebUI](https://github.com/open-webui/open-webui): Chat interface for LLMs
+- [OpenClaw](https://github.com/openclaw/openclaw): Claude AI coding assistant with gateway and CLI (access at `openclaw.${hostname}`)
 
 ## ✅ Prerequisites
 - A domain name
@@ -175,3 +176,6 @@ For external storage and reverse proxy support, also add:
 
 ### Media services security
 ⚠️ **Important:** Set up authentication on Sonarr, Radarr, and Lidarr immediately after first deployment, otherwise they will be exposed without password protection.
+
+### OpenClaw setup
+OpenClaw connects to Claude AI via your claude.ai session. Configure `OPENCLAW_GATEWAY_TOKEN` in `.env` (generate with `openssl rand -hex 32`) and add your Claude session credentials (`CLAUDE_AI_SESSION_KEY`, `CLAUDE_WEB_SESSION_KEY`, `CLAUDE_WEB_COOKIE`). See the [OpenClaw documentation](https://docs.openclaw.ai/) for obtaining these values. The `openclaw-cli` service uses the `DONOTDEPLOY` profile—run it manually with `docker compose run --rm openclaw-cli` when needed.
